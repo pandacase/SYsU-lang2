@@ -1,9 +1,9 @@
-#include "SYsU_lang.h" // 确保这里的头文件名与您生成的词法分析器匹配
+#include "SYsU_lang.h" // make sure the name is same as .g4
 #include <fstream>
 #include <iostream>
 #include <unordered_map>
 
-// 映射定义，将ANTLR的tokenTypeName映射到clang的格式
+// definition mapping，ANTLR tokenTypeName -> clang format
 std::unordered_map<std::string, std::string> tokenTypeMapping = {
   { "Int", "int" },
   { "Identifier", "identifier" },
@@ -21,22 +21,21 @@ std::unordered_map<std::string, std::string> tokenTypeMapping = {
   { "Plus", "plus" },
   { "Comma", "comma" },
 
-  // 在这里继续添加其他映射
+  // more...
 };
 
-void
-print_token(const antlr4::Token* token,
-            const antlr4::CommonTokenStream& tokens,
-            std::ofstream& outFile,
-            const antlr4::Lexer& lexer)
-{
+void print_token(
+      const antlr4::Token* token,
+      const antlr4::CommonTokenStream& tokens,
+      std::ofstream& outFile,
+      const antlr4::Lexer& lexer) {
   auto& vocabulary = lexer.getVocabulary();
 
   auto tokenTypeName =
     std::string(vocabulary.getSymbolicName(token->getType()));
 
   if (tokenTypeName.empty())
-    tokenTypeName = "<UNKNOWN>"; // 处理可能的空字符串情况
+    tokenTypeName = "<UNKNOWN>"; // empty string
 
   if (tokenTypeMapping.find(tokenTypeName) != tokenTypeMapping.end()) {
     tokenTypeName = tokenTypeMapping[tokenTypeName];
@@ -58,9 +57,7 @@ print_token(const antlr4::Token* token,
   outFile << locInfo << std::endl;
 }
 
-int
-main(int argc, char* argv[])
-{
+int main(int argc, char* argv[]) {
   if (argc != 3) {
     std::cout << "Usage: " << argv[0] << " <input> <output>\n";
     return -1;
@@ -78,9 +75,9 @@ main(int argc, char* argv[])
     return -3;
   }
 
-  std::cout << "程序 '" << argv[0] << std::endl;
-  std::cout << "输入 '" << argv[1] << std::endl;
-  std::cout << "输出 '" << argv[2] << std::endl;
+  std::cout << "Program '" << argv[0] << std::endl;
+  std::cout << "Input   '" << argv[1] << std::endl;
+  std::cout << "Output  '" << argv[2] << std::endl;
 
   antlr4::ANTLRInputStream input(inFile);
   SYsU_lang lexer(&input);

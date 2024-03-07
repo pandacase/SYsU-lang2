@@ -1,13 +1,14 @@
-# 你的学号
-set(STUDENT_ID "0123456789")
-# 你的姓名
-set(STUDENT_NAME "某某某")
+# Your ID
+set(STUDENT_ID "21307301")
+# Your name
+set(STUDENT_NAME "丁艺桦")
 
-# 实验一的完成方式："flex"或"antlr"
-set(TASK1_WITH "flex")
+# lab1 framework: "flex" or "antlr"
+set(TASK1_WITH "antlr")
 
-# 实验二的完成方式："bison"或"antlr"
+# lab2 framework: "bison" or "antlr"
 set(TASK2_WITH "bison")
+
 # 是否在实验二复活，ON或OFF
 set(TASK2_REVIVE OFF)
 

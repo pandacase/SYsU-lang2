@@ -1,7 +1,6 @@
 #include <iostream>
 
 int
-main()
-{
+main() {
   std::cout << "Hello, SYsU-lang!" << std::endl;
 }
