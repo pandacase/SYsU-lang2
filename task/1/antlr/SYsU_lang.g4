@@ -1,7 +1,19 @@
 lexer grammar SYsU_lang;
 
 Int : 'int';
+Void : 'void';
+Float : 'float';
+Double : 'double';
+Char : 'char';
+
 Return : 'return';
+Const: 'const';
+If: 'if';
+Else: 'else';
+While: 'while';
+Break: 'break';
+Continue: 'continue';
+Switch: 'switch';
 
 LeftParen : '(';
 RightParen : ')';
@@ -10,12 +22,35 @@ RightBracket : ']';
 LeftBrace : '{';
 RightBrace : '}';
 
-Plus : '+';
-
 Semi : ';';
 Comma : ',';
 
 Equal : '=';
+
+Plus : '+';
+Plusequal : '+=';
+Minus : '-';
+Minusequal : '-=';
+Star : '*';
+Starequal : '*=';
+Slash : '/';
+Slashequal : '/=';
+Percent : '%';
+Percentequal : '%=';
+
+Greater : '>';
+Greaterequal : '>=';
+Less : '<';
+Lessequal : '<=';
+
+Exclaim : '!';
+Equalequal : '==';
+Exclaimequal : '!=';
+
+Pipe : '|';
+Pipepipe : '||';
+Amp : '&';
+Ampamp : '&&';
 
 Identifier
     :   IdentifierNondigit
@@ -47,6 +82,7 @@ fragment
 IntegerConstant
     :   DecimalConstant
     |   OctalConstant
+    |   HexConstant
     ;
 
 fragment
@@ -59,6 +95,10 @@ OctalConstant
     :   '0' OctalDigit*
     ;
 
+fragment
+HexConstant
+    :   '0x' HexDigit*
+    ;
 
 fragment
 NonzeroDigit
@@ -70,6 +110,10 @@ OctalDigit
     :   [0-7]
     ;
 
+fragment
+HexDigit
+    :   [0-9a-f]
+    ;
 
 // HIDDEN channel:
 

@@ -7,22 +7,61 @@
 // definition mapping，ANTLR tokenTypeName -> clang format
 std::unordered_map<std::string, std::string> tokenTypeMapping = {
   { "Int", "int" },
-  { "Identifier", "identifier" },
+  { "Void" , "void" },
+  { "Float" , "float" },
+  { "Double" , "double" },
+  { "Char" , "char" },
+  
+  { "Const", "const" },
+  { "Return", "return" },
+  { "If", "if" },
+  { "Else", "else" },
+  { "While", "while" },
+  { "Break" , "break" },
+  { "Continue", "continue" },
+  { "Switch" , "switch" },
+  
   { "LeftParen", "l_paren" },
   { "RightParen", "r_paren" },
   { "RightBrace", "r_brace" },
   { "LeftBrace", "l_brace" },
   { "LeftBracket", "l_square" },
   { "RightBracket", "r_square" },
-  { "Constant", "numeric_constant" },
-  { "Return", "return" },
+  
   { "Semi", "semi" },
-  { "EOF", "eof" },
-  { "Equal", "equal" },
-  { "Plus", "plus" },
   { "Comma", "comma" },
 
-  // more...
+  { "Equal", "equal" },
+
+  { "Plus", "plus" },
+  { "Plusequal" , "plusequal" },
+  { "Minus", "minus"},
+  { "Minusequal" , "minusequal" },
+  { "Star", "star"},
+  { "Starequal" , "starequal" },
+  { "Slash", "slash"},
+  { "Slashequal" , "slashequal" },
+  { "Percent", "percent"},
+  { "Percentequal" , "percentequal" },
+  
+  { "Greater", "greater" },
+  { "Greaterequal", "greaterequal" },
+  { "Less", "less" },
+  { "Lessequal", "lessequal" }, 
+  
+  { "Exclaim", "exclaim", },
+  { "Equalequal", "equalequal" },
+  { "Exclaimequal" , "exclaimequal" },
+  
+  { "Pipe" , "pipe" },
+  { "Pipepipe", "pipepipe" },
+  { "Amp" , "amp" },
+  { "Ampamp", "ampamp" },
+  
+  { "Identifier", "identifier" },
+  { "Constant", "numeric_constant" },
+  
+  { "EOF", "eof" },
 };
 
 //! @brief print a single token's results of lexical analysis
@@ -176,13 +215,15 @@ int main(int argc, char* argv[]) {
 
   std::ifstream inFile(argv[1]);
   if (!inFile) {
-    std::cout << "Error: unable to open input file: " << argv[1] << '\n';
+    std::cout << "Error: unable to open input file: " 
+      << argv[1] << '\n';
     return -2;
   }
 
   std::ofstream outFile(argv[2]);
   if (!outFile) {
-    std::cout << "Error: unable to open output file: " << argv[2] << '\n';
+    std::cout << "Error: unable to open output file: " 
+      << argv[2] << '\n';
     return -3;
   }
 
