@@ -71,23 +71,22 @@ OctalDigit
     ;
 
 
-// 预处理信息处理，可以从预处理信息中获得文件名以及行号
-// 预处理信息前面的数组即行号
+// HIDDEN channel:
+
 LineAfterPreprocessing
     :   '#' Whitespace* ~[\r\n]*
-        -> skip
+        -> channel(HIDDEN)
     ;
 
 Whitespace
     :   [ \t]+
-        -> skip
+        -> channel(HIDDEN)
     ;
 
-// 换行符号，可以利用这个信息来更新行号
 Newline
     :   (   '\r' '\n'?
         |   '\n'
         )
-        -> skip
+        -> channel(HIDDEN)
     ;
 

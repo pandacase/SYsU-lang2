@@ -7,7 +7,7 @@ set(STUDENT_NAME "丁艺桦")
 set(TASK1_WITH "antlr")
 
 # lab2 framework: "bison" or "antlr"
-set(TASK2_WITH "bison")
+set(TASK2_WITH "antlr")
 
 # 是否在实验二复活，ON或OFF
 set(TASK2_REVIVE OFF)

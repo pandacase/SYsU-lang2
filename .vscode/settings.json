@@ -76,6 +76,7 @@
     "*.inc": "cpp",
     "*.y": "cpp",
     "CMakeLists.txt": "cmake",
+    "regex": "cpp"
   },
   "editor.unfoldOnClickAfterEndOfLine": false,
   "files.eol": "\n",
