@@ -25,16 +25,27 @@ std::unordered_map<std::string, std::string> tokenTypeMapping = {
   // more...
 };
 
-//! @brief 
+//! @brief print a single token's results of lexical analysis
+//! to output file, having the Info below:
+//! - type : the type of this token.
+//! - text : the token's raw content.
+//! - [StartOfLine]?  : if is the first non-whitespace token
+//!                     of this line.
+//! - [LeadingSpace]? : if there is some whitespace before
+//!                     this token.
+//! - location Info   : <(file location):(line number):(index)>
 //! 
-//! @param token 
-//! @param tokens 
-//! @param outFile 
-//! @param lexer 
-//! @param lineBias 
-//! @param fileLoc 
-//! @param gotSpace 
-//! @param withStart 
+//! @param token a token received: process target.
+//! @param tokens all tokens.
+//! @param outFile out stream to output file.
+//! @param lexer SYsU_lang lexer.
+//! @param lineBias a Int recording that the first line bias,
+//! as same as the number of line of processing info
+//! @param fileLoc the source code file path.
+//! @param gotSpace if there are some space before this token,
+//! this param is true, else false.
+//! @param withStart if the space before this token begins at
+//! `Start Of Line`, this param is true, else false.
 void print_token(
   const antlr4::Token* token,
   const antlr4::CommonTokenStream& tokens,
@@ -96,11 +107,12 @@ void print_token(
   outFile << locInfo << std::endl;
 }
 
-//! @brief 
+//! @brief print all tokens one by one: call print_token to 
+//! print a single token for N times.
 //! 
-//! @param lexer 
-//! @param tokens 
-//! @param outFile 
+//! @param lexer SYsU_lang lexer.
+//! @param tokens all tokens.
+//! @param outFile out stream to output file.
 void print_tokens(
   SYsU_lang& lexer,
   antlr4::CommonTokenStream& tokens,
@@ -112,22 +124,27 @@ void print_tokens(
   for (auto&& token : tokens.getTokens()) {
     if (token->getChannel() == lexer.HIDDEN) {
       if (token->getType() == lexer.LineAfterPreprocessing) {
+        // tag number of lines of preprocessing.
         LinesOfPreprocessing += 1;
-        // only at the first time can read the file location
+        // only at the first time can read the file location.
         if (LinesOfPreprocessing == 1) {
           std::string input = token->getText();
-          std::regex pattern("\"\\/workspaces\\/SYsU-lang2\\/test\\/cases\\/(.+?)\"");
+          std::regex pattern(
+            "\"\\/workspaces\\/SYsU-lang2\\/test\\/cases\\/(.+?)\""
+          );
           std::smatch match;
           if (std::regex_search(input, match, pattern)) {
             fileLoc = match[1];
           }
         }
       } else if (token->getType() == lexer.Whitespace) {
+        // tag the whitespace.
         gotSpace = true;
         if (token->getCharPositionInLine() == 0) {
           withStart = true;
         }
       } else if (token->getType() == lexer.Newline) {
+        // tag the new line.
         gotSpace = false;
         withStart = false;
       }
@@ -148,7 +165,8 @@ void print_tokens(
 }
 
 
-//! @brief 
+//! @brief The client: get the source code after preprocessing
+//! from input file, and put the lexer's result to output file.
 //! 
 int main(int argc, char* argv[]) {
   if (argc != 3) {
