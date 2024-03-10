@@ -1,4 +1,4 @@
-#include "SYsU_lang.h" // make sure the name is same as `.g4`
+#include "SYsU_lang.h" // make sure the name is as same as `.g4`
 #include <fstream>
 #include <iostream>
 #include <unordered_map>
@@ -64,6 +64,7 @@ std::unordered_map<std::string, std::string> tokenTypeMapping = {
   { "EOF", "eof" },
 };
 
+
 //! @brief print a single token's results of lexical analysis
 //! to output file, having the Info below:
 //! - type : the type of this token.
@@ -78,8 +79,7 @@ std::unordered_map<std::string, std::string> tokenTypeMapping = {
 //! @param tokens all tokens.
 //! @param outFile out stream to output file.
 //! @param lexer SYsU_lang lexer.
-//! @param lineBias a Int recording that the first line bias,
-//! as same as the number of line of processing info
+//! @param currLine current line number.
 //! @param fileLoc the source code file path.
 //! @param gotSpace if there are some space before this token,
 //! this param is true, else false.
@@ -90,7 +90,7 @@ void print_token(
   const antlr4::CommonTokenStream& tokens,
   std::ofstream& outFile,
   const antlr4::Lexer& lexer,
-  const int lineBias,
+  const int currLine,
   const std::string& fileLoc,
   const bool gotSpace,
   const bool withStart
@@ -109,7 +109,7 @@ void print_token(
   }
 
   // check if [StartOfLine]
-  const int lineNumber = token->getLine() - lineBias;
+  const int lineNumber = currLine;
   const int indexNumber = token->getCharPositionInLine() + 1;
   bool startOfLine = false;
   if (indexNumber == 1 || withStart) {
@@ -120,7 +120,7 @@ void print_token(
   bool leadingSpace = gotSpace;
 
   // load location info
-  std::string locInfo = " Loc=<./";
+  std::string locInfo = " Loc=<";
   locInfo.append(fileLoc);
   locInfo.append(":");
   locInfo.append(std::to_string(lineNumber));
@@ -128,7 +128,7 @@ void print_token(
   locInfo.append(std::to_string(indexNumber));
   locInfo.append(">");
 
-  // token info output
+  // token info output to file
   if (token->getText() != "<EOF>") {
     outFile << tokenTypeName << " '" << token->getText() << "'";
     if (startOfLine) {
@@ -146,6 +146,7 @@ void print_token(
   outFile << locInfo << std::endl;
 }
 
+
 //! @brief print all tokens one by one: call print_token to 
 //! print a single token for N times.
 //! 
@@ -157,24 +158,26 @@ void print_tokens(
   antlr4::CommonTokenStream& tokens,
   std::ofstream& outFile
 ) {
-  int LinesOfPreprocessing = 0;
   std::string fileLoc;
+  int currLine = 0;
   bool gotSpace = false, withStart = false;
   for (auto&& token : tokens.getTokens()) {
     if (token->getChannel() == lexer.HIDDEN) {
       if (token->getType() == lexer.LineAfterPreprocessing) {
-        // tag number of lines of preprocessing.
-        LinesOfPreprocessing += 1;
-        // only at the first time can read the file location.
-        if (LinesOfPreprocessing == 1) {
-          std::string input = token->getText();
-          std::regex pattern(
-            "\"\\/workspaces\\/SYsU-lang2\\/test\\/cases\\/(.+?)\""
-          );
-          std::smatch match;
-          if (std::regex_search(input, match, pattern)) {
-            fileLoc = match[1];
-          }
+        std::string input = token->getText();
+
+        // match the first line
+        std::regex patternOfNum("# ([0-9]+) \"");
+        std::smatch matchOfNum;
+        if (std::regex_search(input, matchOfNum, patternOfNum)) {
+          currLine = std::stoi(matchOfNum[1]) - 1;
+        }
+
+        // match the file location
+        std::regex patternOfLoc("\"(.+?)\"");
+        std::smatch matchOfLoc;
+        if (std::regex_search(input, matchOfLoc, patternOfLoc)) {
+          fileLoc = matchOfLoc[1];
         }
       } else if (token->getType() == lexer.Whitespace) {
         // tag the whitespace.
@@ -183,14 +186,16 @@ void print_tokens(
           withStart = true;
         }
       } else if (token->getType() == lexer.Newline) {
-        // tag the new line.
+        // when get a newline, reset the start flag.
         gotSpace = false;
         withStart = false;
+        // then current line ++
+        currLine += 1;
       }
     } else {
       print_token(
         token, tokens, outFile, lexer, 
-        LinesOfPreprocessing, fileLoc, 
+        currLine, fileLoc,
         gotSpace, withStart
       );
       if (gotSpace) {
