@@ -139,8 +139,7 @@ void print_token(
       outFile << " [LeadingSpace]";
     }
   } else {
-    outFile << tokenTypeName << " '"
-            << "'";
+    outFile << tokenTypeName << " '" << "'";
   }
 
   outFile << locInfo << std::endl;
@@ -198,6 +197,7 @@ void print_tokens(
         currLine, fileLoc,
         gotSpace, withStart
       );
+      // a token consume a space / start flag.
       if (gotSpace) {
         gotSpace = false;
         if (withStart) {
