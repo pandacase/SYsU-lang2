@@ -1,4 +1,4 @@
-#include "SYsU_lang.h" // make sure the name is as same as `.g4`
+#include "SYsULexer.h" // make sure the name is as same as `.g4`
 #include <fstream>
 #include <iostream>
 #include <unordered_map>
@@ -237,7 +237,7 @@ int main(int argc, char* argv[]) {
   std::cout << "Output  '" << argv[2] << std::endl;
 
   antlr4::ANTLRInputStream input(inFile);
-  SYsU_lang lexer(&input);
+  SYsULexer lexer(&input);
 
   antlr4::CommonTokenStream tokens(&lexer);
   tokens.fill();
