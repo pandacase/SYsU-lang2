@@ -6,8 +6,7 @@
 #include <stack>
 #include <string>
 
-class SYsULexer : public antlr4::TokenSource
-{
+class SYsULexer : public antlr4::TokenSource {
 public:
   SYsULexer(antlr4::CharStream* input);
 
@@ -22,8 +21,7 @@ public:
   std::string getSourceName() override;
 
   template<typename T1>
-  void setTokenFactory(antlr4::TokenFactory<T1>* tokenFactory)
-  {
+  void setTokenFactory(antlr4::TokenFactory<T1>* tokenFactory) {
     mFactory = tokenFactory;
   }
 
@@ -37,18 +35,21 @@ private:
   std::string mSourceName;
   size_t mLine = 1, mColumn = 0;
 
-  std::unique_ptr<antlr4::CommonToken> common_token(size_t type,
-                                                    size_t start,
-                                                    size_t stop,
-                                                    std::string text = {})
-  {
-    return mFactory->create(mSource,
-                            type,
-                            std::move(text),
-                            antlr4::Token::DEFAULT_CHANNEL,
-                            start,
-                            stop,
-                            mLine,
-                            mColumn);
+  std::unique_ptr<antlr4::CommonToken> common_token(
+    size_t type,
+    size_t start,
+    size_t stop,
+    std::string text = {}
+  ) {
+    return mFactory->create(
+      mSource,
+      type,
+      std::move(text),
+      antlr4::Token::DEFAULT_CHANNEL,
+      start,
+      stop,
+      mLine,
+      mColumn
+    );
   }
 };

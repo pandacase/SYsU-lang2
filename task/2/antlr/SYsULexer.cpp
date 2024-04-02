@@ -26,7 +26,37 @@ static const std::unordered_map<std::string, size_t> kClangTokens{
   { "minus", kMinus },
   { "comma", kComma },
   { "l_square", kLeftBracket },
-  { "r_square", kRightBracket }
+  { "r_square", kRightBracket },
+  { "void", kVoid },
+  { "float", kFloat },
+  { "double", kDouble },
+  { "Char", kChar },
+  { "const", kConst },
+  { "if", kIf },
+  { "else", kElse },
+  { "while", kWhile },
+  { "break", kBreak },
+  { "continue", kContinue },
+  { "switch", kSwitch },
+  { "plusequal", kPlusequal },
+  { "minusequal", kMinusequal },
+  { "star", kStar },
+  { "starequal", kStarequal },
+  { "slash", kSlash },
+  { "slashequal", kSlashequal },
+  { "percent", kPercent },
+  { "percentequal", kPercentequal },
+  { "greater", kGreater },
+  { "greaterequal", kGreaterequal },
+  { "less", kLess },
+  { "Lessequal", kLessequal },
+  { "exclaim", kExclaim },
+  { "equalequal", kEqualequal },
+  { "exclaimequal", kExclaimequal },
+  { "pipe", kPipe },
+  { "pipepipe", kPipepipe },
+  { "amp", kAmp },
+  { "ampamp", kAmpamp },
 };
 
 } // namespace
@@ -35,13 +65,9 @@ SYsULexer::SYsULexer(antlr4::CharStream* input)
   : mInput(input)
   , mSource(make_pair(this, input))
   , mFactory(antlr4::CommonTokenFactory::DEFAULT.get())
-  , mSourceName(input->getSourceName())
-{
-}
+  , mSourceName(input->getSourceName()) { }
 
-std::unique_ptr<antlr4::Token>
-SYsULexer::nextToken()
-{
+std::unique_ptr<antlr4::Token> SYsULexer::nextToken() {
   auto c = mInput->LA(1);
   if (c == antlr4::Token::EOF) {
     // 到达文件末尾，退出循环
@@ -124,32 +150,22 @@ FAIL: // 解析失败
   assert(false);
 }
 
-size_t
-SYsULexer::getLine() const
-{
+size_t SYsULexer::getLine() const {
   return mLine;
 }
 
-size_t
-SYsULexer::getCharPositionInLine()
-{
+size_t SYsULexer::getCharPositionInLine() {
   return mColumn;
 }
 
-antlr4::CharStream*
-SYsULexer::getInputStream()
-{
+antlr4::CharStream* SYsULexer::getInputStream() {
   return mInput;
 }
 
-std::string
-SYsULexer::getSourceName()
-{
+std::string SYsULexer::getSourceName() {
   return mSourceName;
 }
 
-antlr4::TokenFactory<antlr4::CommonToken>*
-SYsULexer::getTokenFactory()
-{
+antlr4::TokenFactory<antlr4::CommonToken>* SYsULexer::getTokenFactory() {
   return mFactory;
 }
