@@ -5,16 +5,14 @@
 
 namespace asg {
 
-// 符号表，保存当前作用域的所有声明
-struct Ast2Asg::Symtbl : public std::unordered_map<std::string, Decl*>
-{
+//! @brief Symbol table, which holds all declarations for the current scope
+struct Ast2Asg::Symtbl : public std::unordered_map<std::string, Decl*> {
   Ast2Asg& m;
   Symtbl* mPrev;
 
   Symtbl(Ast2Asg& m)
-    : m(m)
-    , mPrev(m.mSymtbl)
-  {
+  : m(m)
+  , mPrev(m.mSymtbl) {
     m.mSymtbl = this;
   }
 
@@ -23,19 +21,19 @@ struct Ast2Asg::Symtbl : public std::unordered_map<std::string, Decl*>
   Decl* resolve(const std::string& name);
 };
 
-Decl*
-Ast2Asg::Symtbl::resolve(const std::string& name)
-{
+Decl* Ast2Asg::Symtbl::resolve(const std::string& name) {
   auto iter = find(name);
   if (iter != end())
     return iter->second;
-  ASSERT(mPrev != nullptr); // 标识符未定义
+  ASSERT(mPrev != nullptr); // Undefined ID
   return mPrev->resolve(name);
 }
 
-TranslationUnit*
-Ast2Asg::operator()(ast::TranslationUnitContext* ctx)
-{
+//////////////////////////////////////////////////////////////////////////////
+//! Top
+//////////////////////////////////////////////////////////////////////////////
+
+TranslationUnit* Ast2Asg::operator()(ast::TranslationUnitContext* ctx) {
   auto ret = make<asg::TranslationUnit>();
   if (ctx == nullptr)
     return ret;
@@ -54,7 +52,7 @@ Ast2Asg::operator()(ast::TranslationUnitContext* ctx)
       auto funcDecl = self(p);
       ret->decls.push_back(funcDecl);
 
-      // 添加到声明表
+      // Add to declaration table
       localDecls[funcDecl->name] = funcDecl;
     }
 
@@ -65,13 +63,12 @@ Ast2Asg::operator()(ast::TranslationUnitContext* ctx)
   return ret;
 }
 
-//==============================================================================
-// 类型
-//==============================================================================
+//////////////////////////////////////////////////////////////////////////////
+//! Type
+//////////////////////////////////////////////////////////////////////////////
 
 Ast2Asg::SpecQual
-Ast2Asg::operator()(ast::DeclarationSpecifiersContext* ctx)
-{
+Ast2Asg::operator()(ast::DeclarationSpecifiersContext* ctx) {
   SpecQual ret = { Type::Spec::kINVALID, Type::Qual() };
 
   for (auto&& i : ctx->declarationSpecifier()) {
@@ -80,11 +77,11 @@ Ast2Asg::operator()(ast::DeclarationSpecifiersContext* ctx)
         if (p->Int())
           ret.first = Type::Spec::kInt;
         else
-          ABORT(); // 未知的类型说明符
+          ABORT(); // Unknown type descriptor
       }
 
       else
-        ABORT(); // 未知的类型说明符
+        ABORT(); // Unknown type descriptor
     }
 
     else
@@ -95,14 +92,11 @@ Ast2Asg::operator()(ast::DeclarationSpecifiersContext* ctx)
 }
 
 std::pair<TypeExpr*, std::string>
-Ast2Asg::operator()(ast::DeclaratorContext* ctx, TypeExpr* sub)
-{
+Ast2Asg::operator()(ast::DeclaratorContext* ctx, TypeExpr* sub) {
   return self(ctx->directDeclarator(), sub);
 }
 
-static int
-eval_arrlen(Expr* expr)
-{
+static int eval_arrlen(Expr* expr) {
   if (auto p = expr->dcst<IntegerLiteral>())
     return p->val;
 
@@ -112,7 +106,7 @@ eval_arrlen(Expr* expr)
 
     auto var = p->decl->dcst<VarDecl>();
     if (!var || !var->type->qual.const_)
-      ABORT(); // 数组长度必须是编译期常量
+      ABORT(); // Array length must be a compile time constant
 
     switch (var->type->spec) {
       case Type::Spec::kChar:
@@ -122,7 +116,7 @@ eval_arrlen(Expr* expr)
         return eval_arrlen(var->init);
 
       default:
-        ABORT(); // 长度表达式必须是数值类型
+        ABORT(); // Length expression must be of numerical type
     }
   }
 
@@ -167,8 +161,7 @@ eval_arrlen(Expr* expr)
 }
 
 std::pair<TypeExpr*, std::string>
-Ast2Asg::operator()(ast::DirectDeclaratorContext* ctx, TypeExpr* sub)
-{
+Ast2Asg::operator()(ast::DirectDeclaratorContext* ctx, TypeExpr* sub) {
   if (auto p = ctx->Identifier())
     return { sub, p->getText() };
 
@@ -187,13 +180,11 @@ Ast2Asg::operator()(ast::DirectDeclaratorContext* ctx, TypeExpr* sub)
   ABORT();
 }
 
-//==============================================================================
-// 表达式
-//==============================================================================
+//////////////////////////////////////////////////////////////////////////////
+// Expression
+//////////////////////////////////////////////////////////////////////////////
 
-Expr*
-Ast2Asg::operator()(ast::ExpressionContext* ctx)
-{
+Expr* Ast2Asg::operator()(ast::ExpressionContext* ctx) {
   auto list = ctx->assignmentExpression();
   Expr* ret = self(list[0]);
 
@@ -208,9 +199,7 @@ Ast2Asg::operator()(ast::ExpressionContext* ctx)
   return ret;
 }
 
-Expr*
-Ast2Asg::operator()(ast::AssignmentExpressionContext* ctx)
-{
+Expr* Ast2Asg::operator()(ast::AssignmentExpressionContext* ctx) {
   if (auto p = ctx->additiveExpression())
     return self(p);
 
@@ -220,11 +209,79 @@ Ast2Asg::operator()(ast::AssignmentExpressionContext* ctx)
   ret->rht = self(ctx->assignmentExpression());
   return ret;
 }
-Expr*
-Ast2Asg::operator()(ast::AdditiveExpressionContext* ctx)
+
+Expr* Ast2Asg::operator()(ast::MultiplicativeExpressionContext* ctx)
 {
   auto children = ctx->children;
   Expr* ret = self(dynamic_cast<ast::UnaryExpressionContext*>(children[0]));
+
+  for (unsigned i = 1; i < children.size(); ++i) {
+    auto node = make<BinaryExpr>();
+
+    auto token = dynamic_cast<antlr4::tree::TerminalNode*>(children[i])
+                   ->getSymbol()
+                   ->getType();
+    switch (token) {
+      case ast::Star:
+        node->op = node->kMul;
+        break;
+
+      case ast::Slash:
+        node->op = node->kDiv;
+        break;
+
+      case ast::Percent:
+        node->op = node->kMod;
+        break;
+
+      default:
+        ABORT();
+    }
+
+    node->lft = ret;
+    node->rht = self(dynamic_cast<ast::UnaryExpressionContext*>(children[++i]));
+    ret = node;
+  }
+
+  return ret;
+}
+
+// Expr*
+// Ast2Asg::operator()(ast::AdditiveExpressionContext* ctx) {
+//   auto children = ctx->children;
+//   Expr* ret = self(dynamic_cast<ast::UnaryExpressionContext*>(children[0]));
+
+//   for (unsigned i = 1; i < children.size(); ++i) {
+//     auto node = make<BinaryExpr>();
+
+//     auto token = dynamic_cast<antlr4::tree::TerminalNode*>(children[i])
+//                    ->getSymbol()
+//                    ->getType();
+//     switch (token) {
+//       case ast::Plus:
+//         node->op = node->kAdd;
+//         break;
+
+//       case ast::Minus:
+//         node->op = node->kSub;
+//         break;
+
+//       default:
+//         ABORT();
+//     }
+
+//     node->lft = ret;
+//     node->rht = self(dynamic_cast<ast::UnaryExpressionContext*>(children[++i]));
+//     ret = node;
+//   }
+
+//   return ret;
+// }
+
+Expr* Ast2Asg::operator()(ast::AdditiveExpressionContext* ctx) {
+  auto children = ctx->children;
+  Expr* ret = 
+    self(dynamic_cast<ast::MultiplicativeExpressionContext*>(children[0]));
 
   for (unsigned i = 1; i < children.size(); ++i) {
     auto node = make<BinaryExpr>();
@@ -246,16 +303,15 @@ Ast2Asg::operator()(ast::AdditiveExpressionContext* ctx)
     }
 
     node->lft = ret;
-    node->rht = self(dynamic_cast<ast::UnaryExpressionContext*>(children[++i]));
+    node->rht =
+      self(dynamic_cast<ast::MultiplicativeExpressionContext*>(children[++i]));
     ret = node;
   }
 
   return ret;
 }
 
-Expr*
-Ast2Asg::operator()(ast::UnaryExpressionContext* ctx)
-{
+Expr* Ast2Asg::operator()(ast::UnaryExpressionContext* ctx) {
   if (auto p = ctx->postfixExpression())
     return self(p);
 
@@ -282,17 +338,13 @@ Ast2Asg::operator()(ast::UnaryExpressionContext* ctx)
   return ret;
 }
 
-Expr*
-Ast2Asg::operator()(ast::PostfixExpressionContext* ctx)
-{
+Expr* Ast2Asg::operator()(ast::PostfixExpressionContext* ctx) {
   auto children = ctx->children;
   auto sub = self(dynamic_cast<ast::PrimaryExpressionContext*>(children[0]));
   return sub;
 }
 
-Expr*
-Ast2Asg::operator()(ast::PrimaryExpressionContext* ctx)
-{
+Expr* Ast2Asg::operator()(ast::PrimaryExpressionContext* ctx) {
 
   if (auto p = ctx->Identifier()) {
     auto name = p->getText();
@@ -325,9 +377,7 @@ Ast2Asg::operator()(ast::PrimaryExpressionContext* ctx)
   ABORT();
 }
 
-Expr*
-Ast2Asg::operator()(ast::InitializerContext* ctx)
-{
+Expr* Ast2Asg::operator()(ast::InitializerContext* ctx) {
   if (auto p = ctx->assignmentExpression())
     return self(p);
 
@@ -335,7 +385,7 @@ Ast2Asg::operator()(ast::InitializerContext* ctx)
 
   if (auto p = ctx->initializerList()) {
     for (auto&& i : p->initializer()) {
-      // 将初始化列表展平
+      // Flatten the initialization list
       auto expr = self(i);
       if (auto p = expr->dcst<InitListExpr>()) {
         for (auto&& sub : p->list)
@@ -349,13 +399,11 @@ Ast2Asg::operator()(ast::InitializerContext* ctx)
   return ret;
 }
 
-//==============================================================================
-// 语句
-//==============================================================================
+//////////////////////////////////////////////////////////////////////////////
+// Statement
+//////////////////////////////////////////////////////////////////////////////
 
-Stmt*
-Ast2Asg::operator()(ast::StatementContext* ctx)
-{
+Stmt* Ast2Asg::operator()(ast::StatementContext* ctx) {
   if (auto p = ctx->compoundStatement())
     return self(p);
 
@@ -368,9 +416,7 @@ Ast2Asg::operator()(ast::StatementContext* ctx)
   ABORT();
 }
 
-CompoundStmt*
-Ast2Asg::operator()(ast::CompoundStatementContext* ctx)
-{
+CompoundStmt* Ast2Asg::operator()(ast::CompoundStatementContext* ctx) {
   auto ret = make<CompoundStmt>();
 
   if (auto p = ctx->blockItemList()) {
@@ -394,9 +440,7 @@ Ast2Asg::operator()(ast::CompoundStatementContext* ctx)
   return ret;
 }
 
-Stmt*
-Ast2Asg::operator()(ast::ExpressionStatementContext* ctx)
-{
+Stmt* Ast2Asg::operator()(ast::ExpressionStatementContext* ctx) {
   if (auto p = ctx->expression()) {
     auto ret = make<ExprStmt>();
     ret->expr = self(p);
@@ -406,9 +450,7 @@ Ast2Asg::operator()(ast::ExpressionStatementContext* ctx)
   return make<NullStmt>();
 }
 
-Stmt*
-Ast2Asg::operator()(ast::JumpStatementContext* ctx)
-{
+Stmt* Ast2Asg::operator()(ast::JumpStatementContext* ctx) {
   if (ctx->Return()) {
     auto ret = make<ReturnStmt>();
     ret->func = mCurrentFunc;
@@ -420,13 +462,11 @@ Ast2Asg::operator()(ast::JumpStatementContext* ctx)
   ABORT();
 }
 
-//==============================================================================
-// 声明
-//==============================================================================
+//////////////////////////////////////////////////////////////////////////////
+// Declaration
+//////////////////////////////////////////////////////////////////////////////
 
-std::vector<Decl*>
-Ast2Asg::operator()(ast::DeclarationContext* ctx)
-{
+std::vector<Decl*> Ast2Asg::operator()(ast::DeclarationContext* ctx) {
   std::vector<Decl*> ret;
 
   auto specs = self(ctx->declarationSpecifiers());
@@ -436,13 +476,12 @@ Ast2Asg::operator()(ast::DeclarationContext* ctx)
       ret.push_back(self(j, specs));
   }
 
-  // 如果 initDeclaratorList 为空则这行声明语句无意义
+  // If `initDeclaratorList` is empty, this line of declaration 
+  // statement is meaningless
   return ret;
 }
 
-FunctionDecl*
-Ast2Asg::operator()(ast::FunctionDefinitionContext* ctx)
-{
+FunctionDecl* Ast2Asg::operator()(ast::FunctionDefinitionContext* ctx) {
   auto ret = make<FunctionDecl>();
   mCurrentFunc = ret;
 
@@ -460,7 +499,8 @@ Ast2Asg::operator()(ast::FunctionDefinitionContext* ctx)
 
   Symtbl localDecls(self);
 
-  // 函数定义在签名之后就加入符号表，以允许递归调用
+  // The function definition is added to the symbol table after 
+  // signing to allow recursive calls
   (*mSymtbl)[ret->name] = ret;
 
   ret->body = self(ctx->compoundStatement());
@@ -468,9 +508,7 @@ Ast2Asg::operator()(ast::FunctionDefinitionContext* ctx)
   return ret;
 }
 
-Decl*
-Ast2Asg::operator()(ast::InitDeclaratorContext* ctx, SpecQual sq)
-{
+Decl* Ast2Asg::operator()(ast::InitDeclaratorContext* ctx, SpecQual sq) {
   auto [texp, name] = self(ctx->declarator(), nullptr);
   Decl* ret;
 
@@ -515,7 +553,8 @@ Ast2Asg::operator()(ast::InitDeclaratorContext* ctx, SpecQual sq)
     ret = vdecl;
   }
 
-  // 这个实现允许符号重复定义，新定义会取代旧定义
+  // This implementation allows for repeated definitions of symbols,
+  // and the new definition will replace the old one
   (*mSymtbl)[ret->name] = ret;
   return ret;
 }

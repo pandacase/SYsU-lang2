@@ -15,7 +15,7 @@ postfixExpression
 
 unaryExpression
     :
-    (postfixExpression
+    (   postfixExpression
     |   unaryOperator unaryExpression
     )
     ;
@@ -24,8 +24,16 @@ unaryOperator
     :   Plus | Minus
     ;
 
+// additiveExpression
+//     :   unaryExpression ((Plus|Minus) unaryExpression)*
+//     ;
+
+multiplicativeExpression
+    :   unaryExpression ((Star | Slash | Percent) unaryExpression)*
+    ;
+
 additiveExpression
-    :   unaryExpression ((Plus|Minus) unaryExpression)*
+    :   multiplicativeExpression ((Plus | Minus) multiplicativeExpression)*
     ;
 
 
