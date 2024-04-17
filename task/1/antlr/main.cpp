@@ -153,7 +153,7 @@ void print_token(
 //! @param tokens all tokens.
 //! @param outFile out stream to output file.
 void print_tokens(
-  SYsU_lang& lexer,
+  SYsULexer& lexer,
   antlr4::CommonTokenStream& tokens,
   std::ofstream& outFile
 ) {
