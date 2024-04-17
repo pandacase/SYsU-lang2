@@ -6,9 +6,7 @@
 #include <fstream>
 #include <iostream>
 
-int
-main(int argc, char* argv[])
-{
+int main(int argc, char* argv[]) {
   if (argc != 3) {
     std::cout << "Usage: " << argv[0] << " <input> <output>\n";
     return -1;
@@ -28,9 +26,9 @@ main(int argc, char* argv[])
     return -3;
   }
 
-  std::cout << "程序 " << argv[0] << std::endl;
-  std::cout << "输入 " << argv[1] << std::endl;
-  std::cout << "输出 " << argv[2] << std::endl;
+  std::cout << "Program : " << argv[0] << std::endl;
+  std::cout << "Input   : " << argv[1] << std::endl;
+  std::cout << "Output  : " << argv[2] << std::endl;
 
   antlr4::ANTLRInputStream input(inFile);
   SYsULexer lexer(&input);
