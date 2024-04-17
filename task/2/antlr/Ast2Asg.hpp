@@ -32,7 +32,7 @@ public:
 
   using SpecQual = std::pair<Type::Spec, Type::Qual>;
 
-  SpecQual operator()(ast::DeclarationSpecifiersContext* ctx);
+  SpecQual operator()(ast::DeclarationSpecQualsContext* ctx);
 
   //! @brief This method handles declarators, which may contain 
   //! more complex type information such as arrays and functions.

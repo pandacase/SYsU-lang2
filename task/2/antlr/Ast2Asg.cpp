@@ -67,8 +67,32 @@ TranslationUnit* Ast2Asg::operator()(ast::TranslationUnitContext* ctx) {
 //! Type
 //////////////////////////////////////////////////////////////////////////////
 
+// Ast2Asg::SpecQual
+// Ast2Asg::operator()(ast::DeclarationQualifiersContext* ctx) {
+//   SpecQual ret = { Type::Spec::kINVALID, Type::Qual() };
+
+//   for (auto&& i : ctx->declarationQualifier()) {
+//     if (auto p = i->typeQualifier()) {
+//       if (ret.second == Type::Qual{}) {
+//         if (p->Const())
+//           ret.second.const_ = true;
+//         else
+//           ABORT(); // Unknown type descriptor
+//       }
+
+//       else
+//         ABORT(); // Unknown type descriptor
+//     }
+
+//     else
+//       ABORT();
+//   }
+
+//   return ret;
+// }
+
 Ast2Asg::SpecQual
-Ast2Asg::operator()(ast::DeclarationSpecifiersContext* ctx) {
+Ast2Asg::operator()(ast::DeclarationSpecQualsContext* ctx) {
   SpecQual ret = { Type::Spec::kINVALID, Type::Qual() };
 
   for (auto&& i : ctx->declarationSpecifier()) {
@@ -87,6 +111,23 @@ Ast2Asg::operator()(ast::DeclarationSpecifiersContext* ctx) {
     else
       ABORT();
   }
+
+  for (auto&& i : ctx->declarationQualifier()) {
+  if (auto p = i->typeQualifier()) {
+    if (ret.second == Type::Qual{}) {
+      if (p->Const())
+        ret.second.const_ = true;
+      else
+        ABORT(); // Unknown type descriptor
+    }
+
+    else
+      ABORT(); // Unknown type descriptor
+  }
+
+  else
+    ABORT();
+}
 
   return ret;
 }
@@ -469,7 +510,7 @@ Stmt* Ast2Asg::operator()(ast::JumpStatementContext* ctx) {
 std::vector<Decl*> Ast2Asg::operator()(ast::DeclarationContext* ctx) {
   std::vector<Decl*> ret;
 
-  auto specs = self(ctx->declarationSpecifiers());
+  auto specs = self(ctx->declarationSpecQuals());
 
   if (auto p = ctx->initDeclaratorList()) {
     for (auto&& j : p->initDeclarator())
@@ -488,7 +529,7 @@ FunctionDecl* Ast2Asg::operator()(ast::FunctionDefinitionContext* ctx) {
   auto type = make<Type>();
   ret->type = type;
 
-  auto sq = self(ctx->declarationSpecifiers());
+  auto sq = self(ctx->declarationSpecQuals());
   type->spec = sq.first, type->qual = sq.second;
 
   auto [texp, name] = self(ctx->directDeclarator(), nullptr);
