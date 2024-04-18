@@ -67,30 +67,6 @@ TranslationUnit* Ast2Asg::operator()(ast::TranslationUnitContext* ctx) {
 //! Type
 //////////////////////////////////////////////////////////////////////////////
 
-// Ast2Asg::SpecQual
-// Ast2Asg::operator()(ast::DeclarationQualifiersContext* ctx) {
-//   SpecQual ret = { Type::Spec::kINVALID, Type::Qual() };
-
-//   for (auto&& i : ctx->declarationQualifier()) {
-//     if (auto p = i->typeQualifier()) {
-//       if (ret.second == Type::Qual{}) {
-//         if (p->Const())
-//           ret.second.const_ = true;
-//         else
-//           ABORT(); // Unknown type descriptor
-//       }
-
-//       else
-//         ABORT(); // Unknown type descriptor
-//     }
-
-//     else
-//       ABORT();
-//   }
-
-//   return ret;
-// }
-
 Ast2Asg::SpecQual
 Ast2Asg::operator()(ast::DeclarationSpecQualsContext* ctx) {
   SpecQual ret = { Type::Spec::kINVALID, Type::Qual() };
@@ -287,38 +263,6 @@ Expr* Ast2Asg::operator()(ast::MultiplicativeExpressionContext* ctx)
   return ret;
 }
 
-// Expr*
-// Ast2Asg::operator()(ast::AdditiveExpressionContext* ctx) {
-//   auto children = ctx->children;
-//   Expr* ret = self(dynamic_cast<ast::UnaryExpressionContext*>(children[0]));
-
-//   for (unsigned i = 1; i < children.size(); ++i) {
-//     auto node = make<BinaryExpr>();
-
-//     auto token = dynamic_cast<antlr4::tree::TerminalNode*>(children[i])
-//                    ->getSymbol()
-//                    ->getType();
-//     switch (token) {
-//       case ast::Plus:
-//         node->op = node->kAdd;
-//         break;
-
-//       case ast::Minus:
-//         node->op = node->kSub;
-//         break;
-
-//       default:
-//         ABORT();
-//     }
-
-//     node->lft = ret;
-//     node->rht = self(dynamic_cast<ast::UnaryExpressionContext*>(children[++i]));
-//     ret = node;
-//   }
-
-//   return ret;
-// }
-
 Expr* Ast2Asg::operator()(ast::AdditiveExpressionContext* ctx) {
   auto children = ctx->children;
   Expr* ret = 
@@ -415,6 +359,12 @@ Expr* Ast2Asg::operator()(ast::PrimaryExpressionContext* ctx) {
     return ret;
   }
 
+  if (auto p = ctx->expression()) {
+    auto ret = make<ParenExpr>();
+    ret->sub = self(p);
+    return ret;
+  }
+
   ABORT();
 }
 
@@ -499,6 +449,15 @@ Stmt* Ast2Asg::operator()(ast::JumpStatementContext* ctx) {
       ret->expr = self(p);
     return ret;
   }
+  // else if (ctx->Break()) {
+  //   auto ret = make<BreakStmt>();
+  //   // ret->loop;
+  //   return ret;
+  // } else if (ctx->Continue()) {
+  //   auto ret = make<ContinueStmt>();
+  //   // ret->loop;
+  //   return ret;
+  // }
 
   ABORT();
 }

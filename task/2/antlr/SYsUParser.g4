@@ -8,6 +8,7 @@ options {
 primaryExpression
     :   Identifier
     |   Constant
+    |   LeftParen expression RightParen
     ;
 
 // ctx
@@ -57,11 +58,6 @@ declaration
     :   declarationSpecQuals 
         initDeclaratorList? Semi
     ;
-
-// declarationQualifiers
-//     :   declarationQualifier*
-//     ;
-
 
 // ctx
 declarationSpecQuals
@@ -151,9 +147,16 @@ expressionStatement
 
 // ctx
 jumpStatement
-    :   (Return expression?)
-    Semi
+    :   (Return expression?) Semi
     ;
+// jumpStatement
+//     :
+//     (   (Return expression?)
+//     |   Break
+//     |   Continue
+//     )
+//     Semi
+//     ;
 
 compilationUnit
     :   translationUnit? EOF
@@ -171,6 +174,7 @@ externalDeclaration
 
 // ctx
 functionDefinition
-    : declarationSpecQuals directDeclarator LeftParen RightParen compoundStatement
+    :   declarationSpecQuals directDeclarator 
+    LeftParen RightParen compoundStatement
     ;
 
