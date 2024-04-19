@@ -71,45 +71,101 @@ TranslationUnit* Ast2Asg::operator()(ast::TranslationUnitContext* ctx) {
 //////////////////////////////////////////////////////////////////////////////
 
 Ast2Asg::SpecQual
-Ast2Asg::operator()(ast::DeclarationSpecQualsContext* ctx) {
+Ast2Asg::operator()(ast::DeclarationSpecifiersContext* ctx) {
   SpecQual ret = { Type::Spec::kINVALID, Type::Qual() };
 
   for (auto&& i : ctx->declarationSpecifier()) {
     if (auto p = i->typeSpecifier()) {
       if (ret.first == Type::Spec::kINVALID) {
-        if (p->Int())
+        if (p->Void())
+          ret.first = Type::Spec::kVoid;
+        else if (p->Int())
           ret.first = Type::Spec::kInt;
+        else if (p->Char())
+          ret.first = Type::Spec::kChar;
+        else if (p->Long())
+          ret.first = Type::Spec::kLong;
         else
           ABORT(); // Unknown type descriptor
-      }
-
-      else
+      } else {
         ABORT(); // Unknown type descriptor
+      }
+    }
+
+    else if (auto p = i->typeQualifier()) {
+      if (ret.second == Type::Qual{}) {
+        if (p->Const())
+          ret.second.const_ = true;
+        else
+          ABORT(); // Unknown type descriptor
+      } else {
+        ABORT(); // Unknown type descriptor
+      }
     }
 
     else
       ABORT();
-  }
-
-  for (auto&& i : ctx->declarationQualifier()) {
-  if (auto p = i->typeQualifier()) {
-    if (ret.second == Type::Qual{}) {
-      if (p->Const())
-        ret.second.const_ = true;
-      else
-        ABORT(); // Unknown type descriptor
     }
 
-    else
-      ABORT(); // Unknown type descriptor
-  }
+  // for (auto&& i : ctx->declarationQualifier()) {
+  //   if (auto p = i->typeQualifier()) {
+  //     if (ret.second == Type::Qual{}) {
+  //       if (p->Const())
+  //         ret.second.const_ = true;
+  //       else
+  //         ABORT(); // Unknown type descriptor
+  //     }
 
-  else
-    ABORT();
-}
+  //     else
+  //       ABORT(); // Unknown type descriptor
+  //   }
+
+  //   else
+  //     ABORT();
+  // }
 
   return ret;
 }
+
+// Ast2Asg::SpecQual
+// Ast2Asg::operator()(ast::DeclarationSpecifiersContext* ctx) {
+//   SpecQual ret = { Type::Spec::kINVALID, Type::Qual() };
+
+//   for (auto&& i : ctx->declarationSpecifier()) {
+//     if (auto p = i->typeSpecifier()) {
+//       if (ret.first == Type::Spec::kINVALID) {
+//         if (p->Void())
+//           ret.first = Type::Spec::kVoid;
+//         else if (p->Int())
+//           ret.first = Type::Spec::kInt;
+//         else if (p->Char())
+//           ret.first = Type::Spec::kChar;
+//         else if (p->Long())
+//           ret.first = Type::Spec::kLong;
+//         else
+//           ABORT(); // Unknown type descriptor
+//       } else {
+//         ABORT(); // Unknown type descriptor
+//       }
+//     }
+
+//     if (auto p = i->typeQualifier()) {
+//       if (ret.second == Type::Qual{}) {
+//         if (p->Const())
+//           ret.second.const_ = true;
+//         else
+//           ABORT(); // Unknown type descriptor
+//       } else {
+//         ABORT(); // Unknown type descriptor
+//       }
+//     }
+
+//     else
+//       ABORT();
+//   }
+
+//   return ret;
+// }
 
 std::pair<TypeExpr*, std::string>
 Ast2Asg::operator()(ast::DeclaratorContext* ctx, TypeExpr* sub) {
@@ -669,7 +725,7 @@ Stmt* Ast2Asg::operator()(ast::JumpStatementContext* ctx) {
 std::vector<Decl*> Ast2Asg::operator()(ast::DeclarationContext* ctx) {
   std::vector<Decl*> ret;
 
-  auto specs = self(ctx->declarationSpecQuals());
+  auto specs = self(ctx->declarationSpecifiers());
 
   if (auto p = ctx->initDeclaratorList()) {
     for (auto&& j : p->initDeclarator())
@@ -688,7 +744,7 @@ FunctionDecl* Ast2Asg::operator()(ast::FunctionDefinitionContext* ctx) {
   auto type = make<Type>();
   ret->type = type;
 
-  auto sq = self(ctx->declarationSpecQuals());
+  auto sq = self(ctx->declarationSpecifiers());
   type->spec = sq.first, type->qual = sq.second;
 
   auto [texp, name] = self(ctx->directDeclarator(), nullptr);

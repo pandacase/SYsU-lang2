@@ -57,6 +57,7 @@ static const std::unordered_map<std::string, size_t> kClangTokens{
   { "pipepipe", kPipepipe },
   { "amp", kAmp },
   { "ampamp", kAmpamp },
+  { "long", kLong },
 };
 
 } // namespace

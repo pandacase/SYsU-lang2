@@ -80,24 +80,19 @@ expression
 
 // ctx
 declaration
-    :   declarationSpecQuals 
+    :   declarationSpecifiers 
         initDeclaratorList? Semi
     ;
 
 // ctx
-declarationSpecQuals
-    :   declarationQualifier*
-        declarationSpecifier+
+declarationSpecifiers
+    :   declarationSpecifier+
     ;
 
 declarationSpecifier
     :   typeSpecifier
+    |   typeQualifier
     ;
-
-declarationQualifier
-    :   typeQualifier
-    ;
-
 
 initDeclaratorList
     :   initDeclarator (Comma initDeclarator)*
@@ -108,9 +103,11 @@ initDeclarator
     :   declarator (Equal initializer)?
     ;
 
-
 typeSpecifier
-    :   Int
+    :   Void
+    |   Char
+    |   Int
+    |   Long
     ;
 
 typeQualifier
@@ -137,7 +134,7 @@ parameterList
 
 // ctx
 parameterDeclaration
-    :   declarationSpecQuals Identifier
+    :   declarationSpecifiers Identifier
     ;
 
 identifierList
@@ -221,7 +218,7 @@ externalDeclaration
 
 // ctx
 functionDefinition
-    :   declarationSpecQuals directDeclarator 
+    :   declarationSpecifiers directDeclarator 
     LeftParen (parameterList)? RightParen compoundStatement
     ;
 
