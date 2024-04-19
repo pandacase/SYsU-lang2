@@ -4,6 +4,8 @@ options {
   tokenVocab=SYsULexer;
 }
 
+// consts;
+
 // ctx
 primaryExpression
     :   Identifier
@@ -14,6 +16,10 @@ primaryExpression
 // ctx
 postfixExpression
     :   primaryExpression  
+    //  array subscript expr
+    |   postfixExpression LeftBracket expression RightBracket
+    // function call expr
+    |   postfixExpression LeftParen (expression)* RightParen
     ;
 
 // ctx
@@ -27,10 +33,6 @@ unaryExpression
 unaryOperator
     :   Plus | Minus
     ;
-
-// additiveExpression
-//     :   unaryExpression ((Plus|Minus) unaryExpression)*
-//     ;
 
 // ctx
 multiplicativeExpression
@@ -157,6 +159,8 @@ jumpStatement
 //     )
 //     Semi
 //     ;
+
+// ifStatement
 
 compilationUnit
     :   translationUnit? EOF

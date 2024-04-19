@@ -5,7 +5,8 @@
 
 namespace asg {
 
-//! @brief Symbol table, which holds all declarations for the current scope
+//! @brief Symbol table, which holds all declarations for the current scope.
+//!
 struct Ast2Asg::Symtbl : public std::unordered_map<std::string, Decl*> {
   Ast2Asg& m;
   Symtbl* mPrev;
@@ -21,6 +22,8 @@ struct Ast2Asg::Symtbl : public std::unordered_map<std::string, Decl*> {
   Decl* resolve(const std::string& name);
 };
 
+//! @brief find out a Decl whose name is `name` in the symbol table.
+//! 
 Decl* Ast2Asg::Symtbl::resolve(const std::string& name) {
   auto iter = find(name);
   if (iter != end())
@@ -113,6 +116,10 @@ Ast2Asg::operator()(ast::DeclaratorContext* ctx, TypeExpr* sub) {
   return self(ctx->directDeclarator(), sub);
 }
 
+//! @brief calculating a expression's literal value.
+//! 
+//! @param expr the expression.
+//! @return int the literal result of the expression.
 static int eval_arrlen(Expr* expr) {
   if (auto p = expr->dcst<IntegerLiteral>())
     return p->val;
@@ -198,18 +205,18 @@ Ast2Asg::operator()(ast::DirectDeclaratorContext* ctx, TypeExpr* sub) {
 }
 
 //////////////////////////////////////////////////////////////////////////////
-// Expression
+//! Expression
 //////////////////////////////////////////////////////////////////////////////
 
 Expr* Ast2Asg::operator()(ast::ExpressionContext* ctx) {
-  auto list = ctx->assignmentExpression();
-  Expr* ret = self(list[0]);
+  auto assignExprList = ctx->assignmentExpression();
+  Expr* ret = self(assignExprList[0]);
 
-  for (unsigned i = 1; i < list.size(); ++i) {
+  for (unsigned i = 1; i < assignExprList.size(); ++i) {
     auto node = make<BinaryExpr>();
     node->op = node->kComma;
     node->lft = ret;
-    node->rht = self(list[i]);
+    node->rht = self(assignExprList[i]);
     ret = node;
   }
 
@@ -227,6 +234,44 @@ Expr* Ast2Asg::operator()(ast::AssignmentExpressionContext* ctx) {
   return ret;
 }
 
+//! @details This parsing func use the `antlr4::ParseTree` methods.
+//!
+Expr* Ast2Asg::operator()(ast::AdditiveExpressionContext* ctx) {
+
+  auto children = ctx->children;
+  Expr* ret = 
+    self(dynamic_cast<ast::MultiplicativeExpressionContext*>(children[0]));
+
+  for (unsigned i = 1; i < children.size(); ++i) {
+    auto node = make<BinaryExpr>();
+
+    auto op = dynamic_cast<antlr4::tree::TerminalNode*>(children[i])
+                  ->getSymbol()
+                  ->getType();
+    switch (op) {
+      case ast::Plus:
+        node->op = node->kAdd;
+        break;
+
+      case ast::Minus:
+        node->op = node->kSub;
+        break;
+
+      default:
+        ABORT();
+    }
+
+    node->lft = ret;
+    node->rht =
+      self(dynamic_cast<ast::MultiplicativeExpressionContext*>(children[++i]));
+    ret = node;
+  }
+
+  return ret;
+}
+
+//! @details This parsing func use the `antlr4::ParseTree` methods.
+//!
 Expr* Ast2Asg::operator()(ast::MultiplicativeExpressionContext* ctx)
 {
   auto children = ctx->children;
@@ -235,10 +280,10 @@ Expr* Ast2Asg::operator()(ast::MultiplicativeExpressionContext* ctx)
   for (unsigned i = 1; i < children.size(); ++i) {
     auto node = make<BinaryExpr>();
 
-    auto token = dynamic_cast<antlr4::tree::TerminalNode*>(children[i])
-                   ->getSymbol()
-                   ->getType();
-    switch (token) {
+    auto op = dynamic_cast<antlr4::tree::TerminalNode*>(children[i])
+                    ->getSymbol()
+                    ->getType();
+    switch (op) {
       case ast::Star:
         node->op = node->kMul;
         break;
@@ -263,49 +308,16 @@ Expr* Ast2Asg::operator()(ast::MultiplicativeExpressionContext* ctx)
   return ret;
 }
 
-Expr* Ast2Asg::operator()(ast::AdditiveExpressionContext* ctx) {
-  auto children = ctx->children;
-  Expr* ret = 
-    self(dynamic_cast<ast::MultiplicativeExpressionContext*>(children[0]));
-
-  for (unsigned i = 1; i < children.size(); ++i) {
-    auto node = make<BinaryExpr>();
-
-    auto token = dynamic_cast<antlr4::tree::TerminalNode*>(children[i])
-                   ->getSymbol()
-                   ->getType();
-    switch (token) {
-      case ast::Plus:
-        node->op = node->kAdd;
-        break;
-
-      case ast::Minus:
-        node->op = node->kSub;
-        break;
-
-      default:
-        ABORT();
-    }
-
-    node->lft = ret;
-    node->rht =
-      self(dynamic_cast<ast::MultiplicativeExpressionContext*>(children[++i]));
-    ret = node;
-  }
-
-  return ret;
-}
-
 Expr* Ast2Asg::operator()(ast::UnaryExpressionContext* ctx) {
   if (auto p = ctx->postfixExpression())
     return self(p);
 
   auto ret = make<UnaryExpr>();
 
-  switch (
-    dynamic_cast<antlr4::tree::TerminalNode*>(ctx->unaryOperator()->children[0])
-      ->getSymbol()
-      ->getType()) {
+  auto op = dynamic_cast<antlr4::tree::TerminalNode*>(
+              ctx->unaryOperator()->children[0]
+            )->getSymbol()->getType();
+  switch (op) {
     case ast::Plus:
       ret->op = ret->kPos;
       break;
@@ -324,13 +336,28 @@ Expr* Ast2Asg::operator()(ast::UnaryExpressionContext* ctx) {
 }
 
 Expr* Ast2Asg::operator()(ast::PostfixExpressionContext* ctx) {
-  auto children = ctx->children;
-  auto sub = self(dynamic_cast<ast::PrimaryExpressionContext*>(children[0]));
-  return sub;
+  if (auto p = ctx->primaryExpression()) 
+    return self(p);
+  
+  if (auto p = ctx->LeftBracket()) { // array subscript expr
+    auto ret = make<BinaryExpr>();
+    ret->lft = self(ctx->postfixExpression());
+    ret->op = asg::BinaryExpr::kIndex;
+    ret->rht = self(ctx->expression(0));
+    return ret;
+  }
+
+  if (auto p = ctx->LeftParen()) { // function call expr
+    auto ret = make<CallExpr>();
+    ret->head = self(ctx->postfixExpression());
+    for (auto&& i : ctx->expression()) {
+      ret->args.push_back(self(i));
+    }
+    return ret;
+  }
 }
 
 Expr* Ast2Asg::operator()(ast::PrimaryExpressionContext* ctx) {
-
   if (auto p = ctx->Identifier()) {
     auto name = p->getText();
     auto ret = make<DeclRefExpr>();
@@ -368,6 +395,9 @@ Expr* Ast2Asg::operator()(ast::PrimaryExpressionContext* ctx) {
   ABORT();
 }
 
+//! @details The `initializer` and `initializerList` is indirect
+//! mutual recursive
+//!
 Expr* Ast2Asg::operator()(ast::InitializerContext* ctx) {
   if (auto p = ctx->assignmentExpression())
     return self(p);
@@ -391,7 +421,7 @@ Expr* Ast2Asg::operator()(ast::InitializerContext* ctx) {
 }
 
 //////////////////////////////////////////////////////////////////////////////
-// Statement
+//! Statement
 //////////////////////////////////////////////////////////////////////////////
 
 Stmt* Ast2Asg::operator()(ast::StatementContext* ctx) {
@@ -463,7 +493,7 @@ Stmt* Ast2Asg::operator()(ast::JumpStatementContext* ctx) {
 }
 
 //////////////////////////////////////////////////////////////////////////////
-// Declaration
+//! Declaration
 //////////////////////////////////////////////////////////////////////////////
 
 std::vector<Decl*> Ast2Asg::operator()(ast::DeclarationContext* ctx) {
