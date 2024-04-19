@@ -31,7 +31,9 @@ unaryExpression
     ;
 
 unaryOperator
-    :   Plus | Minus
+    :   Plus
+    |   Minus
+    |   Exclaim
     ;
 
 // ctx
@@ -45,8 +47,29 @@ additiveExpression
     ;
 
 // ctx
+relationalExpression
+    :   additiveExpression ((Less | Greater | Lessequal | Greaterequal) additiveExpression)*
+    ;
+
+// ctx
+equalityExpression
+    :   relationalExpression ((Equalequal | Exclaimequal) relationalExpression)*
+    ;
+
+// ctx
+logicalAndExpression
+    :   equalityExpression (Ampamp equalityExpression)*
+    ;
+
+// ctx
+logicalOrExpression
+    :   logicalAndExpression (Pipepipe logicalAndExpression)*
+    ;
+
+
+// ctx
 assignmentExpression
-    :   additiveExpression
+    :   logicalOrExpression
     |   unaryExpression Equal assignmentExpression
     ;
 
@@ -102,7 +125,19 @@ declarator
 // ctx
 directDeclarator
     :   Identifier
+    // array decl
     |   directDeclarator LeftBracket assignmentExpression? RightBracket
+    // // function decl
+    // |   directDeclarator LeftParen parameterList? RightParen
+    ;
+
+parameterList
+    :   parameterDeclaration (Comma parameterDeclaration)*
+    ;
+
+// ctx
+parameterDeclaration
+    :   declarationSpecQuals Identifier
     ;
 
 identifierList
@@ -124,6 +159,8 @@ initializerList
 statement
     :   compoundStatement
     |   expressionStatement
+    |   ifStatement
+    |   iterationStatement
     |   jumpStatement
     ;
 
@@ -149,18 +186,24 @@ expressionStatement
 
 // ctx
 jumpStatement
-    :   (Return expression?) Semi
+    :
+    (   Break
+    |   Continue
+    |   Return expression?
+    )
+    Semi
     ;
-// jumpStatement
-//     :
-//     (   (Return expression?)
-//     |   Break
-//     |   Continue
-//     )
-//     Semi
-//     ;
 
-// ifStatement
+
+// ctx
+ifStatement
+    :   If LeftParen expression RightParen statement (Else statement)?
+    ;
+
+// ctx
+iterationStatement
+    :   While LeftParen expression RightParen statement
+    ;
 
 compilationUnit
     :   translationUnit? EOF
@@ -179,6 +222,6 @@ externalDeclaration
 // ctx
 functionDefinition
     :   declarationSpecQuals directDeclarator 
-    LeftParen RightParen compoundStatement
+    LeftParen (parameterList)? RightParen compoundStatement
     ;
 
