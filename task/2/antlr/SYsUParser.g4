@@ -4,7 +4,9 @@ options {
   tokenVocab=SYsULexer;
 }
 
-// consts;
+//////////////////////////////////////////////////////////////////////////////
+//! Expression
+//////////////////////////////////////////////////////////////////////////////
 
 // ctx
 primaryExpression
@@ -19,15 +21,13 @@ postfixExpression
     //  array subscript expr
     |   postfixExpression LeftBracket expression RightBracket
     // function call expr
-    |   postfixExpression LeftParen (expression)* RightParen
+    |   postfixExpression LeftParen (expression)? RightParen
     ;
 
 // ctx
 unaryExpression
-    :
-    (   postfixExpression
+    :   postfixExpression
     |   unaryOperator unaryExpression
-    )
     ;
 
 unaryOperator
@@ -78,10 +78,14 @@ expression
     :   assignmentExpression (Comma assignmentExpression)*
     ;
 
+
+//////////////////////////////////////////////////////////////////////////////
+//! Declaration
+//////////////////////////////////////////////////////////////////////////////
+
 // ctx
 declaration
-    :   declarationSpecifiers 
-        initDeclaratorList? Semi
+    :   declarationSpecifiers initDeclaratorList? Semi
     ;
 
 // ctx
@@ -92,15 +96,6 @@ declarationSpecifiers
 declarationSpecifier
     :   typeSpecifier
     |   typeQualifier
-    ;
-
-initDeclaratorList
-    :   initDeclarator (Comma initDeclarator)*
-    ;
-
-// ctx
-initDeclarator
-    :   declarator (Equal initializer)?
     ;
 
 typeSpecifier
@@ -114,6 +109,15 @@ typeQualifier
     :   Const
     ;
 
+initDeclaratorList
+    :   initDeclarator (Comma initDeclarator)*
+    ;
+
+// ctx
+initDeclarator
+    :   declarator (Equal initializer)?
+    ;
+
 // ctx
 declarator
     :   directDeclarator
@@ -124,9 +128,10 @@ directDeclarator
     :   Identifier
     // array decl
     |   directDeclarator LeftBracket assignmentExpression? RightBracket
-    // // function decl
-    // |   directDeclarator LeftParen parameterList? RightParen
+    // function decl
+    |   directDeclarator LeftParen parameterList? RightParen
     ;
+
 
 parameterList
     :   parameterDeclaration (Comma parameterDeclaration)*
@@ -134,7 +139,7 @@ parameterList
 
 // ctx
 parameterDeclaration
-    :   declarationSpecifiers Identifier
+    :   declarationSpecifiers directDeclarator
     ;
 
 identifierList
@@ -151,6 +156,11 @@ initializerList
     // :   designation? initializer (Comma designation? initializer)*
     :   initializer (Comma initializer)*
     ;
+
+
+//////////////////////////////////////////////////////////////////////////////
+//! Statement
+//////////////////////////////////////////////////////////////////////////////
 
 // ctx
 statement
@@ -202,6 +212,10 @@ iterationStatement
     :   While LeftParen expression RightParen statement
     ;
 
+//////////////////////////////////////////////////////////////////////////////
+//! Top
+//////////////////////////////////////////////////////////////////////////////
+
 compilationUnit
     :   translationUnit? EOF
     ;
@@ -218,7 +232,5 @@ externalDeclaration
 
 // ctx
 functionDefinition
-    :   declarationSpecifiers directDeclarator 
-    LeftParen (parameterList)? RightParen compoundStatement
+    :   declarationSpecifiers initDeclarator compoundStatement
     ;
-

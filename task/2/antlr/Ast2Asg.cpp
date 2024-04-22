@@ -32,146 +32,6 @@ Decl* Ast2Asg::Symtbl::resolve(const std::string& name) {
   return mPrev->resolve(name);
 }
 
-//////////////////////////////////////////////////////////////////////////////
-//! Top
-//////////////////////////////////////////////////////////////////////////////
-
-TranslationUnit* Ast2Asg::operator()(ast::TranslationUnitContext* ctx) {
-  auto ret = make<asg::TranslationUnit>();
-  if (ctx == nullptr)
-    return ret;
-
-  Symtbl localDecls(self);
-
-  for (auto&& i : ctx->externalDeclaration()) {
-    if (auto p = i->declaration()) {
-      auto decls = self(p);
-      ret->decls.insert(ret->decls.end(),
-                        std::make_move_iterator(decls.begin()),
-                        std::make_move_iterator(decls.end()));
-    }
-
-    else if (auto p = i->functionDefinition()) {
-      auto funcDecl = self(p);
-      ret->decls.push_back(funcDecl);
-
-      // Add to declaration table
-      localDecls[funcDecl->name] = funcDecl;
-    }
-
-    else
-      ABORT();
-  }
-
-  return ret;
-}
-
-//////////////////////////////////////////////////////////////////////////////
-//! Type
-//////////////////////////////////////////////////////////////////////////////
-
-Ast2Asg::SpecQual
-Ast2Asg::operator()(ast::DeclarationSpecifiersContext* ctx) {
-  SpecQual ret = { Type::Spec::kINVALID, Type::Qual() };
-
-  for (auto&& i : ctx->declarationSpecifier()) {
-    if (auto p = i->typeSpecifier()) {
-      if (ret.first == Type::Spec::kINVALID) {
-        if (p->Void())
-          ret.first = Type::Spec::kVoid;
-        else if (p->Int())
-          ret.first = Type::Spec::kInt;
-        else if (p->Char())
-          ret.first = Type::Spec::kChar;
-        else if (p->Long())
-          ret.first = Type::Spec::kLong;
-        else
-          ABORT(); // Unknown type descriptor
-      } else {
-        ABORT(); // Unknown type descriptor
-      }
-    }
-
-    else if (auto p = i->typeQualifier()) {
-      if (ret.second == Type::Qual{}) {
-        if (p->Const())
-          ret.second.const_ = true;
-        else
-          ABORT(); // Unknown type descriptor
-      } else {
-        ABORT(); // Unknown type descriptor
-      }
-    }
-
-    else
-      ABORT();
-    }
-
-  // for (auto&& i : ctx->declarationQualifier()) {
-  //   if (auto p = i->typeQualifier()) {
-  //     if (ret.second == Type::Qual{}) {
-  //       if (p->Const())
-  //         ret.second.const_ = true;
-  //       else
-  //         ABORT(); // Unknown type descriptor
-  //     }
-
-  //     else
-  //       ABORT(); // Unknown type descriptor
-  //   }
-
-  //   else
-  //     ABORT();
-  // }
-
-  return ret;
-}
-
-// Ast2Asg::SpecQual
-// Ast2Asg::operator()(ast::DeclarationSpecifiersContext* ctx) {
-//   SpecQual ret = { Type::Spec::kINVALID, Type::Qual() };
-
-//   for (auto&& i : ctx->declarationSpecifier()) {
-//     if (auto p = i->typeSpecifier()) {
-//       if (ret.first == Type::Spec::kINVALID) {
-//         if (p->Void())
-//           ret.first = Type::Spec::kVoid;
-//         else if (p->Int())
-//           ret.first = Type::Spec::kInt;
-//         else if (p->Char())
-//           ret.first = Type::Spec::kChar;
-//         else if (p->Long())
-//           ret.first = Type::Spec::kLong;
-//         else
-//           ABORT(); // Unknown type descriptor
-//       } else {
-//         ABORT(); // Unknown type descriptor
-//       }
-//     }
-
-//     if (auto p = i->typeQualifier()) {
-//       if (ret.second == Type::Qual{}) {
-//         if (p->Const())
-//           ret.second.const_ = true;
-//         else
-//           ABORT(); // Unknown type descriptor
-//       } else {
-//         ABORT(); // Unknown type descriptor
-//       }
-//     }
-
-//     else
-//       ABORT();
-//   }
-
-//   return ret;
-// }
-
-std::pair<TypeExpr*, std::string>
-Ast2Asg::operator()(ast::DeclaratorContext* ctx, TypeExpr* sub) {
-  return self(ctx->directDeclarator(), sub);
-}
-
 //! @brief calculating a expression's literal value.
 //! 
 //! @param expr the expression.
@@ -240,6 +100,90 @@ static int eval_arrlen(Expr* expr) {
   ABORT();
 }
 
+//////////////////////////////////////////////////////////////////////////////
+//! Top
+//////////////////////////////////////////////////////////////////////////////
+
+TranslationUnit* Ast2Asg::operator()(ast::TranslationUnitContext* ctx) {
+  auto ret = make<asg::TranslationUnit>();
+  if (ctx == nullptr)
+    return ret;
+
+  Symtbl localDecls(self);
+
+  for (auto&& i : ctx->externalDeclaration()) {
+    if (auto p = i->declaration()) {
+      auto decls = self(p);
+      ret->decls.insert(ret->decls.end(),
+      std::make_move_iterator(decls.begin()),
+      std::make_move_iterator(decls.end()));
+    }
+
+    else if (auto p = i->functionDefinition()) {
+      auto funcDecl = self(p);
+      ret->decls.push_back(funcDecl);
+
+      // Add to declaration table
+      localDecls[funcDecl->name] = funcDecl;
+    }
+
+    else
+      ABORT();
+  }
+
+  return ret;
+}
+
+//////////////////////////////////////////////////////////////////////////////
+//! Type
+//////////////////////////////////////////////////////////////////////////////
+
+Ast2Asg::SpecQual
+Ast2Asg::operator()(ast::DeclarationSpecifiersContext* ctx) {
+  SpecQual ret = { Type::Spec::kINVALID, Type::Qual() };
+
+  for (auto&& i : ctx->declarationSpecifier()) {
+    if (auto p = i->typeSpecifier()) {
+      if (ret.first == Type::Spec::kINVALID) {
+        if (p->Void())
+          ret.first = Type::Spec::kVoid;
+        else if (p->Int())
+          ret.first = Type::Spec::kInt;
+        else if (p->Char())
+          ret.first = Type::Spec::kChar;
+        else if (p->Long())
+          ret.first = Type::Spec::kLong;
+        else
+          ABORT(); // Unknown type descriptor
+      } else {
+        ABORT(); // Unknown type descriptor
+      }
+    }
+
+    else if (auto p = i->typeQualifier()) {
+      if (ret.second == Type::Qual{}) {
+        if (p->Const())
+          ret.second.const_ = true;
+        else
+          ABORT(); // Unknown type descriptor
+      } else {
+        ABORT(); // Unknown type descriptor
+      }
+    }
+
+    else
+      ABORT();
+    }
+  return ret;
+}
+
+std::pair<TypeExpr*, std::string>
+Ast2Asg::operator()(ast::DeclaratorContext* ctx, TypeExpr* sub) {
+  return self(ctx->directDeclarator(), sub);
+}
+
+
+
 std::pair<TypeExpr*, std::string>
 Ast2Asg::operator()(ast::DirectDeclaratorContext* ctx, TypeExpr* sub) {
   if (auto p = ctx->Identifier())
@@ -257,25 +201,24 @@ Ast2Asg::operator()(ast::DirectDeclaratorContext* ctx, TypeExpr* sub) {
     return self(ctx->directDeclarator(), arrayType);
   }
 
-  // if (ctx->LeftParen()) {
-  //   auto funcType = make<FunctionType>();
-  //   funcType->sub = sub;
-
-  //   if(auto p = ctx->parameterList()) {
-  //     for (auto&& i : p->parameterDeclaration()) {
-  //       funcType->params.push_back(self(i));
-  //     }
-  //   }
-
-  //   return self(ctx->directDeclarator(), funcType);
-  // }
+  if (ctx->LeftParen()) {
+    auto funcType = make<FunctionType>();
+    funcType->sub = sub;
+    if (auto paramList = ctx->parameterList()) {
+      for (auto param : paramList->parameterDeclaration()) {
+        auto specQual = self(param->declarationSpecifiers());
+        auto paramType = make<Type>();
+        paramType->spec = specQual.first;
+        paramType->qual = specQual.second;
+        paramType->texp = self(param->directDeclarator(), nullptr).first;
+        funcType->params.push_back(paramType);
+      }
+    }
+    return self(ctx->directDeclarator(), funcType);
+  }
 
   ABORT();
 }
-
-// Type* Ast2Asg::operator()(ast::ParameterDeclarationContext* ctx) {
-//   
-// }
 
 //////////////////////////////////////////////////////////////////////////////
 //! Expression
@@ -536,27 +479,32 @@ Expr* Ast2Asg::operator()(ast::UnaryExpressionContext* ctx) {
   return ret;
 }
 
-Expr* Ast2Asg::operator()(ast::PostfixExpressionContext* ctx) {
-  if (auto p = ctx->primaryExpression()) 
+Expr* Ast2Asg::operator() (ast::PostfixExpressionContext* ctx) {
+  if (auto p = ctx->primaryExpression()) {
     return self(p);
-  
-  if (ctx->LeftBracket()) { // array subscript expr
+  }
+
+  if (ctx->LeftBracket()) {
     auto ret = make<BinaryExpr>();
+    ret->op = ret->kIndex;
     ret->lft = self(ctx->postfixExpression());
-    ret->op = asg::BinaryExpr::kIndex;
-    ret->rht = self(ctx->expression(0));
+    ret->rht = self(ctx->expression());
     return ret;
   }
 
-  if (ctx->LeftParen()) { // function call expr
+  if (ctx->LeftParen()) {
     auto ret = make<CallExpr>();
     ret->head = self(ctx->postfixExpression());
-    for (auto&& i : ctx->expression()) {
-      ret->args.push_back(self(i));
+    if (auto p = ctx->expression()) {
+      for (auto&& arg : p->assignmentExpression())
+        ret->args.push_back(self(arg));
     }
     return ret;
   }
+
+  ABORT();
 }
+
 
 Expr* Ast2Asg::operator()(ast::PrimaryExpressionContext* ctx) {
   if (auto p = ctx->Identifier()) {
@@ -727,9 +675,9 @@ std::vector<Decl*> Ast2Asg::operator()(ast::DeclarationContext* ctx) {
 
   auto specs = self(ctx->declarationSpecifiers());
 
-  if (auto p = ctx->initDeclaratorList()) {
-    for (auto&& j : p->initDeclarator())
-      ret.push_back(self(j, specs));
+  if (auto initDeclList = ctx->initDeclaratorList()) {
+    for (auto&& p : initDeclList->initDeclarator())
+      ret.push_back(self(p, specs));
   }
 
   // If `initDeclaratorList` is empty, this line of declaration 
@@ -738,66 +686,66 @@ std::vector<Decl*> Ast2Asg::operator()(ast::DeclarationContext* ctx) {
 }
 
 FunctionDecl* Ast2Asg::operator()(ast::FunctionDefinitionContext* ctx) {
-  auto ret = make<FunctionDecl>();
+  auto specQual = self(ctx->declarationSpecifiers());
+  auto ret = dynamic_cast<FunctionDecl*>(self(ctx->initDeclarator(), specQual));
+  // funcDecl has been fully parsed in `self(InitDeclaratorContext, specQual)`
   mCurrentFunc = ret;
-
-  auto type = make<Type>();
-  ret->type = type;
-
-  auto sq = self(ctx->declarationSpecifiers());
-  type->spec = sq.first, type->qual = sq.second;
-
-  auto [texp, name] = self(ctx->directDeclarator(), nullptr);
-  auto funcType = make<FunctionType>();
-  funcType->sub = texp;
-  type->texp = funcType;
-  ret->name = std::move(name);
-
   Symtbl localDecls(self);
-
-  // The function definition is added to the symbol table after 
-  // signing to allow recursive calls
-  (*mSymtbl)[ret->name] = ret;
-
+  for (auto&& paramDecl: ret->params) {
+    (*mSymtbl)[paramDecl->name] = paramDecl;
+  }
   ret->body = self(ctx->compoundStatement());
-
   return ret;
 }
 
 Decl* Ast2Asg::operator()(ast::InitDeclaratorContext* ctx, SpecQual sq) {
-  auto [texp, name] = self(ctx->declarator(), nullptr);
   Decl* ret;
+  
+  // declarator --> directDeclarator
+  auto [texp, name] = self(ctx->declarator(), nullptr);
 
+  // Type.texp -> FunctionType / ArrayType
+  auto type = make<Type>();
+  type->spec = sq.first;
+  type->qual = sq.second;
+
+  // funcType has been fully parsed in `self(DirectDeclaratorContext, nullptr)`
   if (auto funcType = texp->dcst<FunctionType>()) {
-    auto fdecl = make<FunctionDecl>();
-    auto type = make<Type>();
-    fdecl->type = type;
+    auto funcDecl = make<FunctionDecl>();
+    funcDecl->type = type;
+    funcDecl->name = std::move(name);
 
-    type->spec = sq.first;
-    type->qual = sq.second;
     type->texp = funcType;
 
-    fdecl->name = std::move(name);
-    for (auto p : funcType->params) {
-      auto paramDecl = make<VarDecl>();
-      paramDecl->type = p;
-      fdecl->params.push_back(paramDecl);
+    if (auto paramList = ctx->declarator()->directDeclarator()->parameterList()) {
+      for (auto&& param : paramList->parameterDeclaration()) {
+        auto paramSpecQual = self(param->declarationSpecifiers());
+        auto [paramTexp, paramName] = self(param->directDeclarator(), nullptr);
+        
+        auto paramType = make<Type>();
+        paramType->spec = paramSpecQual.first;
+        paramType->qual = paramSpecQual.second;
+        paramType->texp = paramTexp;
+        
+        auto paramDecl = make<VarDecl>();
+        paramDecl->type = paramType;
+        paramDecl->name = std::move(paramName);
+
+        funcDecl->params.push_back(paramDecl);
+      }
     }
 
     if (ctx->initializer())
       ABORT();
-    fdecl->body = nullptr;
+    funcDecl->body = nullptr;
 
-    ret = fdecl;
+    ret = funcDecl;
   }
 
-  else {
+  else { // arrayType or NULL
     auto vdecl = make<VarDecl>();
-    auto type = make<Type>();
     vdecl->type = type;
 
-    type->spec = sq.first;
-    type->qual = sq.second;
     type->texp = texp;
     vdecl->name = std::move(name);
 

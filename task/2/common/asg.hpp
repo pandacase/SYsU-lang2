@@ -40,7 +40,9 @@ struct Type : Obj
   Spec spec{ Spec::kINVALID };
   Qual qual;
 
-  TypeExpr* texp{ nullptr };
+  // 若一个 Type 是 Array / Func，则这个指针指向 
+  // TypeExpr::ArrayType / TypeExpr::FunctionType
+  TypeExpr* texp{ nullptr };  
 
   /**
    * @brief 类型等价性判断，等价性是类型系统最重要的性质，我们在这里而不是
