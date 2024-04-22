@@ -49,7 +49,7 @@ static const std::unordered_map<std::string, size_t> kClangTokens{
   { "greater", kGreater },
   { "greaterequal", kGreaterequal },
   { "less", kLess },
-  { "Lessequal", kLessequal },
+  { "lessequal", kLessequal },
   { "exclaim", kExclaim },
   { "equalequal", kEqualequal },
   { "exclaimequal", kExclaimequal },
