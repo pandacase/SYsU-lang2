@@ -687,13 +687,15 @@ std::vector<Decl*> Ast2Asg::operator()(ast::DeclarationContext* ctx) {
 
 FunctionDecl* Ast2Asg::operator()(ast::FunctionDefinitionContext* ctx) {
   auto specQual = self(ctx->declarationSpecifiers());
+  
   auto ret = dynamic_cast<FunctionDecl*>(self(ctx->initDeclarator(), specQual));
   // funcDecl has been fully parsed in `self(InitDeclaratorContext, specQual)`
   mCurrentFunc = ret;
-  Symtbl localDecls(self);
+  // Symtbl localDecls(self);
   for (auto&& paramDecl: ret->params) {
     (*mSymtbl)[paramDecl->name] = paramDecl;
   }
+
   ret->body = self(ctx->compoundStatement());
   return ret;
 }
