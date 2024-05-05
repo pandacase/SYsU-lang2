@@ -395,7 +395,7 @@ EmitIR::operator()(WhileStmt* obj)
   //! @c while.body block
   mCurIrb = std::make_unique<llvm::IRBuilder<>>(while_body_block);
   self(obj->body);
-  //! @note after self(), the mCurIrb may not be if_xxx_block
+  //! @note after self(), the mCurIrb may not be while_xxx_block
   if (mCurIrb->GetInsertBlock()->getTerminator() == nullptr)
     mCurIrb->CreateBr(while_cond_block);
 
@@ -553,12 +553,24 @@ EmitIR::operator()(FunctionDecl* obj)
   if (obj->body == nullptr)
     return;
   
-  // Function `define`
+  // Function entry
   auto entryBb = llvm::BasicBlock::Create(mCtx, "entry", func);
   mCurIrb = std::make_unique<llvm::IRBuilder<>>(entryBb);
   auto& entryIrb = *mCurIrb;
 
-  // TODO: 添加对函数参数的处理
+  // Function parmas
+  auto argIt = func->arg_begin();
+  for (auto&& paramDecl : obj->params) {
+    argIt->setName(paramDecl->name);
+    llvm::AllocaInst *var = mCurIrb->CreateAlloca(
+      self(paramDecl->type), nullptr, std::move(paramDecl->name + ".addr")
+    );
+
+    paramDecl->any = var;
+
+    mCurIrb->CreateStore(&(*argIt), var);
+    ++argIt;
+  }
 
   // translate the function body
   mCurFunc = func;
