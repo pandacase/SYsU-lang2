@@ -319,9 +319,18 @@ EmitIR::operator()(ExprStmt* obj)
 void
 EmitIR::operator()(CompoundStmt* obj)
 {
-  // TODO: 可以在此添加对符号重名的处理
+  auto& irb = *mCurIrb;
+  // record the top of stack
+  // auto sp = irb.CreateIntrinsic(
+  //   llvm::Intrinsic::stacksave, {}, {}, nullptr, "sp"
+  // );
+
+  // process the Stmts in CompoundStmt
   for (auto&& stmt : obj->subs)
     self(stmt);
+
+  // restore the top of stack
+  // irb.CreateIntrinsic(llvm::Intrinsic::stackrestore, {}, {sp});
 }
 
 void
@@ -329,38 +338,69 @@ EmitIR::operator()(IfStmt* obj)
 {
   auto& irb = *mCurIrb;
 
-  auto condExpr = self(obj->cond);
   llvm::BasicBlock* if_then_block = llvm::BasicBlock::Create(
     mCtx, "if.then", mCurFunc
   );
   llvm::BasicBlock* if_else_block = llvm::BasicBlock::Create(
     mCtx, "if.else", mCurFunc
   );
-  llvm::BasicBlock* return_block = llvm::BasicBlock::Create(
-    mCtx, "return", mCurFunc
+  llvm::BasicBlock* if_end_block = llvm::BasicBlock::Create(
+    mCtx, "if.end", mCurFunc
   );
 
-  irb.CreateCondBr(condExpr, if_then_block, if_else_block);
+  irb.CreateCondBr(self(obj->cond), if_then_block, if_else_block);
 
-  // if.then block
+  //! @c if.then block
   mCurIrb = std::make_unique<llvm::IRBuilder<>>(if_then_block);
   self(obj->then);
-  mCurIrb->CreateBr(return_block);
+  //! @note after self(), the mCurIrb may not be if_xxx_block
+  if (mCurIrb->GetInsertBlock()->getTerminator() == nullptr)
+    mCurIrb->CreateBr(if_end_block);
 
-  // if.else block
+  //! @c if.else block
   mCurIrb = std::make_unique<llvm::IRBuilder<>>(if_else_block);
   if (obj->else_)
     self(obj->else_);
-  mCurIrb->CreateBr(return_block);
+  //! @note after self(), the mCurIrb may not be if_xxx_block
+  if (mCurIrb->GetInsertBlock()->getTerminator() == nullptr)
+    mCurIrb->CreateBr(if_end_block);
 
-  // return block
-  mCurIrb = std::make_unique<llvm::IRBuilder<>>(return_block);
+  //! @c if.end block
+  mCurIrb = std::make_unique<llvm::IRBuilder<>>(if_end_block);
 }
 
 void
 EmitIR::operator()(WhileStmt* obj)
 {
+  auto& irb = *mCurIrb;
 
+  llvm::BasicBlock* while_cond_block = llvm::BasicBlock::Create(
+    mCtx, "while.cond", mCurFunc
+  );
+  llvm::BasicBlock* while_body_block = llvm::BasicBlock::Create(
+    mCtx, "while.body", mCurFunc
+  );
+  llvm::BasicBlock* while_end_block = llvm::BasicBlock::Create(
+    mCtx, "while.end", mCurFunc
+  );
+
+  obj->any = while_body_block;
+
+  irb.CreateBr(while_cond_block);
+
+  //! @c while.cond block
+  mCurIrb = std::make_unique<llvm::IRBuilder<>>(while_cond_block);
+  mCurIrb->CreateCondBr(self(obj->cond), while_body_block, while_end_block);
+
+  //! @c while.body block
+  mCurIrb = std::make_unique<llvm::IRBuilder<>>(while_body_block);
+  self(obj->body);
+  //! @note after self(), the mCurIrb may not be if_xxx_block
+  if (mCurIrb->GetInsertBlock()->getTerminator() == nullptr)
+    mCurIrb->CreateBr(while_cond_block);
+
+  //! @c while.end block
+  mCurIrb = std::make_unique<llvm::IRBuilder<>>(while_end_block);
 }
 
 void
@@ -372,13 +412,35 @@ EmitIR::operator()(DoStmt* obj)
 void
 EmitIR::operator()(BreakStmt* obj)
 {
-
+  // currently in the while.body block
+  auto& irb = *mCurIrb;
+  auto whileBodyBlock = reinterpret_cast<llvm::BasicBlock*>(obj->loop->any);
+  
+  for (auto it = mCurFunc->begin(); it != mCurFunc->end(); ++it) {
+    if (&(*it) == whileBodyBlock) {
+      auto prevIt = ++it;
+      // br to while.end block
+      irb.CreateBr(&(*prevIt));
+      break;
+    }
+  }
 }
 
 void
 EmitIR::operator()(ContinueStmt* obj)
 {
-
+  // currently in the while.body block
+  auto& irb = *mCurIrb;
+  auto whileBodyBlock = reinterpret_cast<llvm::BasicBlock*>(obj->loop->any);
+  
+  for (auto it = mCurFunc->begin(); it != mCurFunc->end(); ++it) {
+    if (&(*it) == whileBodyBlock) {
+      auto prevIt = --it;
+      // br to while.cond block
+      irb.CreateBr(&(*prevIt));
+      break;
+    }
+  }
 }
 
 void
