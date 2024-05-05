@@ -184,18 +184,21 @@ EmitIR::operator()(BinaryExpr* obj)
       return irb.CreateICmpEQ(lftVal, rhtVal);
     case BinaryExpr::kNe:
       return irb.CreateICmpNE(lftVal, rhtVal);
-    // case BinaryExpr::kAnd:
+    case BinaryExpr::kAnd:
     //   return irb.Create
-    // case BinaryExpr::kOr:
+    case BinaryExpr::kOr:
     //   return irb.Create
     case BinaryExpr::kAssign:
       irb.CreateStore(rhtVal, lftVal);
       return rhtVal;
-    // case BinaryExpr::kComma:
+    case BinaryExpr::kComma:
     //   return irb.Create
     case BinaryExpr::kIndex:
+      // std::vector<llvm::Value*> idxList{
+      //   irb.getInt64(0), irb.getInt64(rhtVal->getSExtValue())
+      // }
+      // irb.CreateInBoundsGEP()
       // return ;
-      // irb.
     default:
       ABORT();
   }
@@ -204,7 +207,17 @@ EmitIR::operator()(BinaryExpr* obj)
 llvm::Value*
 EmitIR::operator()(CallExpr* obj)
 {
+  auto& irb = *mCurIrb;
   
+  auto calleeFunc = mMod.getFunction(self(obj->head)->getName());
+  
+  std::vector<llvm::Value*> argsVector;
+  for (auto&& arg : obj->args) {
+    argsVector.push_back(self(arg));
+  }
+  auto argsRef = llvm::ArrayRef<llvm::Value*>(argsVector);
+
+  return irb.CreateCall(calleeFunc, argsRef);
 }
 
 llvm::Value*
@@ -234,6 +247,10 @@ EmitIR::operator()(ImplicitCastExpr* obj)
 
     case ImplicitCastExpr::kArrayToPointerDecay: {
       
+    }
+
+    case ImplicitCastExpr::kFunctionToPointerDecay: {
+      return sub;
     }
 
     default:
@@ -295,9 +312,8 @@ EmitIR::operator()(DeclStmt* obj) {
 void
 EmitIR::operator()(ExprStmt* obj)
 {
-  if (auto p = obj->expr) {
+  if (auto p = obj->expr)
     self(p);
-  }
 }
 
 void
@@ -311,7 +327,34 @@ EmitIR::operator()(CompoundStmt* obj)
 void
 EmitIR::operator()(IfStmt* obj)
 {
+  auto& irb = *mCurIrb;
 
+  auto condExpr = self(obj->cond);
+  llvm::BasicBlock* if_then_block = llvm::BasicBlock::Create(
+    mCtx, "if.then", mCurFunc
+  );
+  llvm::BasicBlock* if_else_block = llvm::BasicBlock::Create(
+    mCtx, "if.else", mCurFunc
+  );
+  llvm::BasicBlock* return_block = llvm::BasicBlock::Create(
+    mCtx, "return", mCurFunc
+  );
+
+  irb.CreateCondBr(condExpr, if_then_block, if_else_block);
+
+  // if.then block
+  mCurIrb = std::make_unique<llvm::IRBuilder<>>(if_then_block);
+  self(obj->then);
+  mCurIrb->CreateBr(return_block);
+
+  // if.else block
+  mCurIrb = std::make_unique<llvm::IRBuilder<>>(if_else_block);
+  if (obj->else_)
+    self(obj->else_);
+  mCurIrb->CreateBr(return_block);
+
+  // return block
+  mCurIrb = std::make_unique<llvm::IRBuilder<>>(return_block);
 }
 
 void
