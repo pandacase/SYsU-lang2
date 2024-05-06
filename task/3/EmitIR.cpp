@@ -143,10 +143,19 @@ EmitIR::operator()(UnaryExpr* obj)
   switch (obj->op) {
     case UnaryExpr::kPos:
       return Val;
-    case UnaryExpr::kNeg:
-      return irb.CreateNeg(Val);
-    case UnaryExpr::kNot:
-      return irb.CreateNot(Val);
+    case UnaryExpr::kNeg: {
+      auto res = irb.CreateNeg(Val);
+      res->setName(std::move("neg"));
+      return res;
+    }
+    case UnaryExpr::kNot: {
+      auto valTy = Val->getType(); 
+      auto toBool = irb.CreateICmpNE(Val, llvm::ConstantInt::get(valTy, 0));
+      toBool->setName(std::move("tobool"));
+      auto res = irb.CreateNot(toBool);
+      res->setName(std::move("not"));
+      return res;
+    }
     default:
       ABORT();
   }
@@ -162,37 +171,104 @@ EmitIR::operator()(BinaryExpr* obj)
 
   auto& irb = *mCurIrb;
   switch (obj->op) {
-    case BinaryExpr::kMul:
-      return irb.CreateMul(lftVal, rhtVal);
-    case BinaryExpr::kDiv:
-      return irb.CreateSDiv(lftVal, rhtVal);
-    case BinaryExpr::kMod:
-      return irb.CreateSRem(lftVal, rhtVal);
-    case BinaryExpr::kAdd:
-      return irb.CreateAdd(lftVal, rhtVal);
-    case BinaryExpr::kSub:
-      return irb.CreateSub(lftVal, rhtVal);
-    case BinaryExpr::kGt:
-      return irb.CreateICmpSGT(lftVal, rhtVal);
-    case BinaryExpr::kLt:
-      return irb.CreateICmpSLT(lftVal, rhtVal);
-    case BinaryExpr::kGe:
-      return irb.CreateICmpSGE(lftVal, rhtVal);
-    case BinaryExpr::kLe:
-      return irb.CreateICmpSLE(lftVal, rhtVal);
-    case BinaryExpr::kEq:
-      return irb.CreateICmpEQ(lftVal, rhtVal);
-    case BinaryExpr::kNe:
-      return irb.CreateICmpNE(lftVal, rhtVal);
-    case BinaryExpr::kAnd:
-    //   return irb.Create
-    case BinaryExpr::kOr:
-    //   return irb.Create
+    case BinaryExpr::kMul:  {
+      auto res = irb.CreateMul(lftVal, rhtVal);
+      res->setName(std::move("mul"));
+      return res;
+    }
+    case BinaryExpr::kDiv:  {
+      auto res = irb.CreateSDiv(lftVal, rhtVal);
+      res->setName(std::move("div"));
+      return res;
+    }
+    case BinaryExpr::kMod:{
+      auto res = irb.CreateSRem(lftVal, rhtVal);
+      res->setName(std::move("rem"));
+      return res;
+    }
+    case BinaryExpr::kAdd: {
+      auto res = irb.CreateAdd(lftVal, rhtVal);
+      res->setName(std::move("add"));
+      return res;
+    }
+    case BinaryExpr::kSub: {
+      auto res = irb.CreateSub(lftVal, rhtVal);
+      res->setName(std::move("sub"));
+      return res;
+    }
+    case BinaryExpr::kGt: {
+      auto res = irb.CreateICmpSGT(lftVal, rhtVal);
+      res->setName(std::move("cmp"));
+      return res;
+    }
+    case BinaryExpr::kLt: {
+      auto res = irb.CreateICmpSLT(lftVal, rhtVal);
+      res->setName(std::move("cmp"));
+      return res;
+    }
+    case BinaryExpr::kGe: {
+      auto res = irb.CreateICmpSGE(lftVal, rhtVal);
+      res->setName(std::move("cmp"));
+      return res;
+    }
+    case BinaryExpr::kLe: {
+      auto res = irb.CreateICmpSLE(lftVal, rhtVal);
+      res->setName(std::move("cmp"));
+      return res;
+    }
+    case BinaryExpr::kEq: {
+      auto res = irb.CreateICmpEQ(lftVal, rhtVal);
+      res->setName(std::move("cmp"));
+      return res;
+    }
+    case BinaryExpr::kNe: {
+      auto res = irb.CreateICmpNE(lftVal, rhtVal);
+      res->setName(std::move("cmp"));
+      return res;
+    }
+    case BinaryExpr::kAnd: {
+      auto curBb = mCurIrb->GetInsertBlock();
+      auto lorRhsBb = llvm::BasicBlock::Create(mCtx, "lor.rhs", mCurFunc);
+      auto lorEndBb = llvm::BasicBlock::Create(mCtx, "lor.end", mCurFunc);
+      // in current block
+      mCurIrb->CreateCondBr(lftVal, lorRhsBb, lorEndBb);
+      
+      // in RHS block
+      mCurIrb = std::make_unique<llvm::IRBuilder<>>(lorRhsBb);
+      mCurIrb->CreateBr(lorEndBb);
+      
+      // in END block
+      mCurIrb = std::make_unique<llvm::IRBuilder<>>(lorEndBb);
+      llvm::PHINode *phi = irb.CreatePHI(llvm::Type::getInt1Ty(mCtx), 2, "merge");
+      phi->addIncoming(mCurIrb->getInt1(false), curBb);
+      phi->addIncoming(rhtVal, lorRhsBb);
+
+      return phi;
+    }
+    case BinaryExpr::kOr: {
+      auto curBb = mCurIrb->GetInsertBlock();
+      auto lorRhsBb = llvm::BasicBlock::Create(mCtx, "lor.rhs", mCurFunc);
+      auto lorEndBb = llvm::BasicBlock::Create(mCtx, "lor.end", mCurFunc);
+      // in current block
+      mCurIrb->CreateCondBr(lftVal, lorEndBb, lorRhsBb);
+      
+      // in RHS block
+      mCurIrb = std::make_unique<llvm::IRBuilder<>>(lorRhsBb);
+      mCurIrb->CreateBr(lorEndBb);
+      
+      // in END block
+      mCurIrb = std::make_unique<llvm::IRBuilder<>>(lorEndBb);
+      llvm::PHINode *phi = irb.CreatePHI(llvm::Type::getInt1Ty(mCtx), 2, "merge");
+      phi->addIncoming(mCurIrb->getInt1(true), curBb);
+      phi->addIncoming(rhtVal, lorRhsBb);
+
+      return phi;
+    }
     case BinaryExpr::kAssign:
       irb.CreateStore(rhtVal, lftVal);
       return rhtVal;
     case BinaryExpr::kComma:
-    //   return irb.Create
+      // return irb.Create
     case BinaryExpr::kIndex:
       // std::vector<llvm::Value*> idxList{
       //   irb.getInt64(0), irb.getInt64(rhtVal->getSExtValue())
@@ -336,44 +412,44 @@ EmitIR::operator()(CompoundStmt* obj)
 void
 EmitIR::operator()(IfStmt* obj)
 {
-  auto& irb = *mCurIrb;
-
-  llvm::BasicBlock* if_then_block = llvm::BasicBlock::Create(
+  llvm::BasicBlock* ifThenBb = llvm::BasicBlock::Create(
     mCtx, "if.then", mCurFunc
   );
-  llvm::BasicBlock* if_else_block = llvm::BasicBlock::Create(
+  llvm::BasicBlock* ifElseBb = llvm::BasicBlock::Create(
     mCtx, "if.else", mCurFunc
   );
-  llvm::BasicBlock* if_end_block = llvm::BasicBlock::Create(
+  llvm::BasicBlock* ifEndBb = llvm::BasicBlock::Create(
     mCtx, "if.end", mCurFunc
   );
 
-  irb.CreateCondBr(self(obj->cond), if_then_block, if_else_block);
+  auto condVal = self(obj->cond);
+  auto condValTy = condVal->getType();
+  auto condBool = mCurIrb->CreateICmpNE(condVal, llvm::ConstantInt::get(condValTy, 0));
+  condBool->setName(std::move("tobool"));
+  mCurIrb->CreateCondBr(condBool, ifThenBb, ifElseBb);
 
   //! @c if.then block
-  mCurIrb = std::make_unique<llvm::IRBuilder<>>(if_then_block);
+  mCurIrb = std::make_unique<llvm::IRBuilder<>>(ifThenBb);
   self(obj->then);
   //! @note after self(), the mCurIrb may not be if_xxx_block
   if (mCurIrb->GetInsertBlock()->getTerminator() == nullptr)
-    mCurIrb->CreateBr(if_end_block);
+    mCurIrb->CreateBr(ifEndBb);
 
   //! @c if.else block
-  mCurIrb = std::make_unique<llvm::IRBuilder<>>(if_else_block);
+  mCurIrb = std::make_unique<llvm::IRBuilder<>>(ifElseBb);
   if (obj->else_)
     self(obj->else_);
   //! @note after self(), the mCurIrb may not be if_xxx_block
   if (mCurIrb->GetInsertBlock()->getTerminator() == nullptr)
-    mCurIrb->CreateBr(if_end_block);
+    mCurIrb->CreateBr(ifEndBb);
 
   //! @c if.end block
-  mCurIrb = std::make_unique<llvm::IRBuilder<>>(if_end_block);
+  mCurIrb = std::make_unique<llvm::IRBuilder<>>(ifEndBb);
 }
 
 void
 EmitIR::operator()(WhileStmt* obj)
 {
-  auto& irb = *mCurIrb;
-
   llvm::BasicBlock* while_cond_block = llvm::BasicBlock::Create(
     mCtx, "while.cond", mCurFunc
   );
@@ -386,11 +462,15 @@ EmitIR::operator()(WhileStmt* obj)
 
   obj->any = while_body_block;
 
-  irb.CreateBr(while_cond_block);
+  mCurIrb->CreateBr(while_cond_block);
 
   //! @c while.cond block
   mCurIrb = std::make_unique<llvm::IRBuilder<>>(while_cond_block);
-  mCurIrb->CreateCondBr(self(obj->cond), while_body_block, while_end_block);
+  auto condVal = self(obj->cond);
+  auto condValTy = condVal->getType();
+  auto condBool = mCurIrb->CreateICmpNE(condVal, llvm::ConstantInt::get(condValTy, 0));
+  condBool->setName(std::move("tobool"));
+  mCurIrb->CreateCondBr(condBool, while_body_block, while_end_block);
 
   //! @c while.body block
   mCurIrb = std::make_unique<llvm::IRBuilder<>>(while_body_block);
@@ -413,14 +493,13 @@ void
 EmitIR::operator()(BreakStmt* obj)
 {
   // currently in the while.body block
-  auto& irb = *mCurIrb;
   auto whileBodyBlock = reinterpret_cast<llvm::BasicBlock*>(obj->loop->any);
   
   for (auto it = mCurFunc->begin(); it != mCurFunc->end(); ++it) {
     if (&(*it) == whileBodyBlock) {
       auto prevIt = ++it;
       // br to while.end block
-      irb.CreateBr(&(*prevIt));
+      mCurIrb->CreateBr(&(*prevIt));
       break;
     }
   }
@@ -430,14 +509,13 @@ void
 EmitIR::operator()(ContinueStmt* obj)
 {
   // currently in the while.body block
-  auto& irb = *mCurIrb;
   auto whileBodyBlock = reinterpret_cast<llvm::BasicBlock*>(obj->loop->any);
   
   for (auto it = mCurFunc->begin(); it != mCurFunc->end(); ++it) {
     if (&(*it) == whileBodyBlock) {
       auto prevIt = --it;
       // br to while.cond block
-      irb.CreateBr(&(*prevIt));
+      mCurIrb->CreateBr(&(*prevIt));
       break;
     }
   }
@@ -481,14 +559,12 @@ EmitIR::trans_init(llvm::Value* val, Expr* obj)
 {
   auto& irb = *mCurIrb;
 
-  // 仅处理整数字面量的初始化
   if (auto p = obj->dcst<IntegerLiteral>()) {
     auto initVal = llvm::ConstantInt::get(self(p->type), p->val);
     irb.CreateStore(initVal, val);
     return;
   }
 
-  // 如果表达式不是整数字面量，则中断编译
   ABORT();
 }
 
@@ -524,13 +600,22 @@ EmitIR::operator()(VarDecl* obj)
     trans_init(gvar, obj->init);
     mCurIrb->CreateRet(nullptr);
     mCurFunc = nullptr;
-  } 
-  
+  }
+
   //! @else LOCAL var
   else {  
-    llvm::AllocaInst *var = irb.CreateAlloca(
-      self(obj->type), nullptr, std::move(obj->name)
-    );
+    // move `alloca` to entryBlock
+    auto entryBb = &mCurFunc->getEntryBlock();
+    llvm::AllocaInst* var;
+    if (entryBb->getTerminator() != nullptr) {
+      var = llvm::IRBuilder<>(entryBb->getTerminator()).CreateAlloca(
+        self(obj->type), nullptr, std::move(obj->name)
+      );
+    } else {
+      var = llvm::IRBuilder<>(entryBb).CreateAlloca(
+        self(obj->type), nullptr, std::move(obj->name)
+      );
+    }
 
     obj->any = var;
 
@@ -561,14 +646,16 @@ EmitIR::operator()(FunctionDecl* obj)
   // Function parmas
   auto argIt = func->arg_begin();
   for (auto&& paramDecl : obj->params) {
+    // set name
     argIt->setName(paramDecl->name);
-    llvm::AllocaInst *var = mCurIrb->CreateAlloca(
+
+    // alloc for params
+    auto *var = mCurIrb->CreateAlloca(
       self(paramDecl->type), nullptr, std::move(paramDecl->name + ".addr")
     );
-
     paramDecl->any = var;
-
     mCurIrb->CreateStore(&(*argIt), var);
+
     ++argIt;
   }
 
