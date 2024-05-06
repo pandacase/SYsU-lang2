@@ -51,13 +51,12 @@ EmitIR::operator()(const Type* type)
     }
   }
 
-  // TODO: 在此添加对指针类型、数组类型和函数类型的处理
   Type subt;
   subt.spec = type->spec;
   subt.qual = type->qual;
   subt.texp = type->texp->sub;
   if (auto p = type->texp->dcst<PointerType>()) {
-
+    return self(&subt)->getPointerTo();
   } else if (auto p = type->texp->dcst<ArrayType>()) {
     return llvm::ArrayType::get(self(&subt), p->len);
   } else if (auto p = type->texp->dcst<FunctionType>()) {
@@ -121,8 +120,6 @@ EmitIR::operator()(IntegerLiteral* obj)
 llvm::Value*
 EmitIR::operator()(DeclRefExpr* obj)
 {
-  // 在LLVM IR层面，左值体现为返回指向值的指针
-  // 在ImplicitCastExpr::kLValueToRValue中发射load指令从而变成右值
   return reinterpret_cast<llvm::Value*>(obj->decl->any);
 }
 
@@ -268,13 +265,14 @@ EmitIR::operator()(BinaryExpr* obj)
       irb.CreateStore(rhtVal, lftVal);
       return rhtVal;
     case BinaryExpr::kComma:
-      // return irb.Create
-    case BinaryExpr::kIndex:
-      // std::vector<llvm::Value*> idxList{
-      //   irb.getInt64(0), irb.getInt64(rhtVal->getSExtValue())
-      // }
-      // irb.CreateInBoundsGEP()
-      // return ;
+      break;
+    case BinaryExpr::kIndex: {
+      std::vector<llvm::Value*> idxList{
+        irb.getInt64(0), rhtVal
+      };
+      auto res = irb.CreateInBoundsGEP(self(obj->lft->type), lftVal, idxList);
+      return res;
+    }
     default:
       ABORT();
   }
@@ -322,7 +320,7 @@ EmitIR::operator()(ImplicitCastExpr* obj)
     }
 
     case ImplicitCastExpr::kArrayToPointerDecay: {
-      
+      return sub;
     }
 
     case ImplicitCastExpr::kFunctionToPointerDecay: {
@@ -395,18 +393,8 @@ EmitIR::operator()(ExprStmt* obj)
 void
 EmitIR::operator()(CompoundStmt* obj)
 {
-  auto& irb = *mCurIrb;
-  // record the top of stack
-  // auto sp = irb.CreateIntrinsic(
-  //   llvm::Intrinsic::stacksave, {}, {}, nullptr, "sp"
-  // );
-
-  // process the Stmts in CompoundStmt
   for (auto&& stmt : obj->subs)
     self(stmt);
-
-  // restore the top of stack
-  // irb.CreateIntrinsic(llvm::Intrinsic::stackrestore, {}, {sp});
 }
 
 void
@@ -563,9 +551,11 @@ EmitIR::trans_init(llvm::Value* val, Expr* obj)
     auto initVal = llvm::ConstantInt::get(self(p->type), p->val);
     irb.CreateStore(initVal, val);
     return;
+  } else if (auto p = obj->dcst<InitListExpr>()) {
+    
+  } else {
+    irb.CreateStore(self(obj), val);
   }
-
-  ABORT();
 }
 
 void
@@ -620,7 +610,8 @@ EmitIR::operator()(VarDecl* obj)
     obj->any = var;
 
     if (obj->init) {
-      irb.CreateStore(self(obj->init), var);
+      // irb.CreateStore(self(obj->init), var);
+      trans_init(var, obj->init);
     }
   }
 }
