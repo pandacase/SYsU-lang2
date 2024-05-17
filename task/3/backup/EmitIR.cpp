@@ -141,30 +141,16 @@ EmitIR::operator()(UnaryExpr* obj)
     case UnaryExpr::kPos:
       return Val;
     case UnaryExpr::kNeg: {
-      llvm::Value* res;
-      if (Val->getType()->isIntegerTy(1)) {
-        auto zext = irb.CreateZExt(Val, irb.getInt32Ty());
-        zext->setName(std::move(Val->getName() + ".ext"));
-        res = irb.CreateNeg(zext);
-      } else {
-        res = irb.CreateNeg(Val);
-      }
-      res->setName(std::move("sub"));
+      auto res = irb.CreateNeg(Val);
+      res->setName(std::move("neg"));
       return res;
     }
-    //! @note In C/CPP, Not operator is logical not, implicitly convert `int`
-    //! to `bool`.
     case UnaryExpr::kNot: {
-      llvm::Value* res;
-      if (!Val->getType()->isIntegerTy(1)) {
-        auto valTy = Val->getType(); 
-        auto toBool = irb.CreateICmpNE(Val, llvm::ConstantInt::get(valTy, 0));
-        toBool->setName(std::move("tobool"));
-        res = irb.CreateNot(toBool);
-      } else {
-        res = irb.CreateNot(Val);
-      }
-      res->setName(std::move("lnot"));
+      auto valTy = Val->getType(); 
+      auto toBool = irb.CreateICmpNE(Val, llvm::ConstantInt::get(valTy, 0));
+      toBool->setName(std::move("tobool"));
+      auto res = irb.CreateNot(toBool);
+      res->setName(std::move("not"));
       return res;
     }
     default:
@@ -304,14 +290,9 @@ EmitIR::operator()(CallExpr* obj)
     argsVector.push_back(self(arg));
   }
 
-  auto call = irb.CreateCall(calleeFunc, std::move(argsVector));
-  // call->setName("call");
+  auto call =  irb.CreateCall(calleeFunc, std::move(argsVector));
+  call->setName(std::move("call"));
   return call;
-  // auto call = reinterpret_cast<llvm::Value*>(
-  //   irb.CreateCall(calleeFunc, std::move(argsVector))
-  // );
-  // call->setName(std::move("call"));
-  // return call;
 }
 
 llvm::Value*
@@ -432,13 +413,8 @@ EmitIR::operator()(IfStmt* obj)
 
   auto condVal = self(obj->cond);
   auto condValTy = condVal->getType();
-  llvm::Value* condBool;
-  if (condValTy->isIntegerTy(1)) { // if is i1
-    condBool = condVal;
-  } else {
-    condBool = mCurIrb->CreateICmpNE(condVal, llvm::ConstantInt::get(condValTy, 0));
-    condBool->setName(std::move("tobool"));
-  }
+  auto condBool = mCurIrb->CreateICmpNE(condVal, llvm::ConstantInt::get(condValTy, 0));
+  condBool->setName(std::move("tobool"));
   mCurIrb->CreateCondBr(condBool, ifThenBb, ifElseBb);
 
   //! @c if.then block
@@ -484,13 +460,8 @@ EmitIR::operator()(WhileStmt* obj)
   mCurIrb = std::make_unique<llvm::IRBuilder<>>(while_cond_block);
   auto condVal = self(obj->cond);
   auto condValTy = condVal->getType();
-  llvm::Value* condBool;
-  if (condValTy->isIntegerTy(1)) { // if is i1
-    condBool = condVal;
-  } else {
-    condBool = mCurIrb->CreateICmpNE(condVal, llvm::ConstantInt::get(condValTy, 0));
-    condBool->setName(std::move("tobool"));
-  }
+  auto condBool = mCurIrb->CreateICmpNE(condVal, llvm::ConstantInt::get(condValTy, 0));
+  condBool->setName(std::move("tobool"));
   mCurIrb->CreateCondBr(condBool, while_body_block, while_end_block);
 
   //! @c while.body block
