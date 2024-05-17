@@ -132,38 +132,34 @@ EmitIR::operator()(ParenExpr* obj)
 llvm::Value*
 EmitIR::operator()(UnaryExpr* obj)
 {
-  llvm::Value *Val;
+  llvm::Value *val;
 
-  Val = self(obj->sub);
+  val = self(obj->sub);
 
   auto& irb = *mCurIrb;
   switch (obj->op) {
     case UnaryExpr::kPos:
-      return Val;
+      return val;
     case UnaryExpr::kNeg: {
-      llvm::Value* res;
-      if (Val->getType()->isIntegerTy(1)) {
-        auto zext = irb.CreateZExt(Val, irb.getInt32Ty());
-        zext->setName(std::move(Val->getName() + ".ext"));
-        res = irb.CreateNeg(zext);
-      } else {
-        res = irb.CreateNeg(Val);
+      if (!val->getType()->isIntegerTy(32)) {
+        auto valExt = irb.CreateZExt(val, irb.getInt32Ty());
+        valExt->setName(std::move(val->getName() + ".ext"));
+        val = valExt;
       }
+      auto res = irb.CreateNeg(val);
       res->setName(std::move("sub"));
       return res;
     }
     //! @note In C/CPP, Not operator is logical not, implicitly convert `int`
     //! to `bool`.
     case UnaryExpr::kNot: {
-      llvm::Value* res;
-      if (!Val->getType()->isIntegerTy(1)) {
-        auto valTy = Val->getType(); 
-        auto toBool = irb.CreateICmpNE(Val, llvm::ConstantInt::get(valTy, 0));
+      if (!val->getType()->isIntegerTy(1)) {
+        auto valTy = val->getType(); 
+        auto toBool = irb.CreateICmpNE(val, llvm::ConstantInt::get(valTy, 0));
         toBool->setName(std::move("tobool"));
-        res = irb.CreateNot(toBool);
-      } else {
-        res = irb.CreateNot(Val);
+        val = toBool;
       }
+      auto res = irb.CreateNot(val);
       res->setName(std::move("lnot"));
       return res;
     }
@@ -183,26 +179,91 @@ EmitIR::operator()(BinaryExpr* obj)
   auto& irb = *mCurIrb;
   switch (obj->op) {
     case BinaryExpr::kMul:  {
+      // check if lftVal is i32
+      if (!lftVal->getType()->isIntegerTy(32)) {
+        auto lftValExt = irb.CreateZExt(lftVal, irb.getInt32Ty());
+        lftValExt->setName(std::move(lftVal->getName() + ".ext"));
+        lftVal = lftValExt;
+      }
+      // check if rhtVal is i32
+      if (!rhtVal->getType()->isIntegerTy(32)) {
+        auto rhtValExt = irb.CreateZExt(rhtVal, irb.getInt32Ty());
+        rhtValExt->setName(std::move(rhtVal->getName() + ".ext"));
+        rhtVal = rhtValExt;
+      }
+
       auto res = irb.CreateMul(lftVal, rhtVal);
       res->setName(std::move("mul"));
       return res;
     }
     case BinaryExpr::kDiv:  {
+      // check if lftVal is i32
+      if (!lftVal->getType()->isIntegerTy(32)) {
+        auto lftValExt = irb.CreateZExt(lftVal, irb.getInt32Ty());
+        lftValExt->setName(std::move(lftVal->getName() + ".ext"));
+        lftVal = lftValExt;
+      }
+      // check if rhtVal is i32
+      if (!rhtVal->getType()->isIntegerTy(32)) {
+        auto rhtValExt = irb.CreateZExt(rhtVal, irb.getInt32Ty());
+        rhtValExt->setName(std::move(rhtVal->getName() + ".ext"));
+        rhtVal = rhtValExt;
+      }
+
       auto res = irb.CreateSDiv(lftVal, rhtVal);
       res->setName(std::move("div"));
       return res;
     }
     case BinaryExpr::kMod:{
+      // check if lftVal is i32
+      if (!lftVal->getType()->isIntegerTy(32)) {
+        auto lftValExt = irb.CreateZExt(lftVal, irb.getInt32Ty());
+        lftValExt->setName(std::move(lftVal->getName() + ".ext"));
+        lftVal = lftValExt;
+      }
+      // check if rhtVal is i32
+      if (!rhtVal->getType()->isIntegerTy(32)) {
+        auto rhtValExt = irb.CreateZExt(rhtVal, irb.getInt32Ty());
+        rhtValExt->setName(std::move(rhtVal->getName() + ".ext"));
+        rhtVal = rhtValExt;
+      }
+      
       auto res = irb.CreateSRem(lftVal, rhtVal);
       res->setName(std::move("rem"));
       return res;
     }
     case BinaryExpr::kAdd: {
+      // check if lftVal is i32
+      if (!lftVal->getType()->isIntegerTy(32)) {
+        auto lftValExt = irb.CreateZExt(lftVal, irb.getInt32Ty());
+        lftValExt->setName(std::move(lftVal->getName() + ".ext"));
+        lftVal = lftValExt;
+      }
+      // check if rhtVal is i32
+      if (!rhtVal->getType()->isIntegerTy(32)) {
+        auto rhtValExt = irb.CreateZExt(rhtVal, irb.getInt32Ty());
+        rhtValExt->setName(std::move(rhtVal->getName() + ".ext"));
+        rhtVal = rhtValExt;
+      }
+      
       auto res = irb.CreateAdd(lftVal, rhtVal);
       res->setName(std::move("add"));
       return res;
     }
     case BinaryExpr::kSub: {
+      // check if lftVal is i32
+      if (!lftVal->getType()->isIntegerTy(32)) {
+        auto lftValExt = irb.CreateZExt(lftVal, irb.getInt32Ty());
+        lftValExt->setName(std::move(lftVal->getName() + ".ext"));
+        lftVal = lftValExt;
+      }
+      // check if rhtVal is i32
+      if (!rhtVal->getType()->isIntegerTy(32)) {
+        auto rhtValExt = irb.CreateZExt(rhtVal, irb.getInt32Ty());
+        rhtValExt->setName(std::move(rhtVal->getName() + ".ext"));
+        rhtVal = rhtValExt;
+      }
+      
       auto res = irb.CreateSub(lftVal, rhtVal);
       res->setName(std::move("sub"));
       return res;
@@ -275,11 +336,13 @@ EmitIR::operator()(BinaryExpr* obj)
 
       return phi;
     }
-    case BinaryExpr::kAssign:
+    case BinaryExpr::kAssign: {
       irb.CreateStore(rhtVal, lftVal);
       return rhtVal;
-    case BinaryExpr::kComma:
+    }
+    case BinaryExpr::kComma: {
       break;
+    }
     case BinaryExpr::kIndex: {
       std::vector<llvm::Value*> idxList{
         irb.getInt64(0), rhtVal
