@@ -55,10 +55,10 @@ EmitIR::operator()(const Type* type)
   subt.spec = type->spec;
   subt.qual = type->qual;
   subt.texp = type->texp->sub;
-  if (auto p = type->texp->dcst<PointerType>()) {
-    return self(&subt)->getPointerTo();
-  } else if (auto p = type->texp->dcst<ArrayType>()) {
+  if (auto p = type->texp->dcst<ArrayType>()) {
     return llvm::ArrayType::get(self(&subt), p->len);
+  } else if (auto p = type->texp->dcst<PointerType>()) {
+    return self(&subt)->getPointerTo();
   } else if (auto p = type->texp->dcst<FunctionType>()) {
     std::vector<llvm::Type*> pty;
     for (auto&& param : p->params) {
@@ -77,7 +77,6 @@ EmitIR::operator()(const Type* type)
 llvm::Value*
 EmitIR::operator()(Expr* obj)
 {
-  // TODO: 在此添加对更多表达式处理的跳转
   if (auto p = obj->dcst<IntegerLiteral>())
     return self(p);
 
@@ -136,32 +135,18 @@ EmitIR::operator()(UnaryExpr* obj)
 
   val = self(obj->sub);
 
-  auto& irb = *mCurIrb;
   switch (obj->op) {
     case UnaryExpr::kPos:
       return val;
     case UnaryExpr::kNeg: {
-      if (!val->getType()->isIntegerTy(32)) {
-        auto valExt = irb.CreateZExt(val, irb.getInt32Ty());
-        valExt->setName(std::move(val->getName() + ".ext"));
-        val = valExt;
-      }
-      auto res = irb.CreateNeg(val);
-      res->setName(std::move("sub"));
-      return res;
+      checkToExt(val);
+      return mCurIrb->CreateNeg(val, std::move("sub"));
     }
     //! @note In C/CPP, Not operator is logical not, implicitly convert `int`
     //! to `bool`.
     case UnaryExpr::kNot: {
-      if (!val->getType()->isIntegerTy(1)) {
-        auto valTy = val->getType(); 
-        auto toBool = irb.CreateICmpNE(val, llvm::ConstantInt::get(valTy, 0));
-        toBool->setName(std::move("tobool"));
-        val = toBool;
-      }
-      auto res = irb.CreateNot(val);
-      res->setName(std::move("lnot"));
-      return res;
+      checkToBool(val);
+      return mCurIrb->CreateNot(val, std::move("lnot"));
     }
     default:
       ABORT();
@@ -171,195 +156,140 @@ EmitIR::operator()(UnaryExpr* obj)
 llvm::Value*
 EmitIR::operator()(BinaryExpr* obj)
 {
-  llvm::Value *lftVal, *rhtVal;
+  //! @if Logical And & Or: short_circuit case.
+  if (obj->op == BinaryExpr::kAnd) {
+    auto lftVal = self(obj->lft);
+    checkToBool(lftVal);
 
-  lftVal = self(obj->lft);
-  rhtVal = self(obj->rht);
+    auto curBb = mCurIrb->GetInsertBlock();
+    auto lorRhsBb = llvm::BasicBlock::Create(mCtx, "land.rhs", mCurFunc);
+    auto lorEndBb = llvm::BasicBlock::Create(mCtx, "land.end", mCurFunc);
+    
+    // in current block
+    mCurIrb->CreateCondBr(lftVal, lorRhsBb, lorEndBb);
+    
+    // in RHS block
+    mCurIrb = std::make_unique<llvm::IRBuilder<>>(lorRhsBb);
+    auto rhtVal = self(obj->rht);
+    //! @details after self(obj->rht), the curr block may not be lorRhsBb
+    //! so we store the curr block here to merge for phi:
+    auto rhtCurBb = mCurIrb->GetInsertBlock();
+    checkToBool(rhtVal);
+    mCurIrb->CreateBr(lorEndBb);
+    
+    // in END block
+    mCurIrb = std::make_unique<llvm::IRBuilder<>>(lorEndBb);
+    llvm::PHINode *phi = mCurIrb->CreatePHI(
+      llvm::Type::getInt1Ty(mCtx), 2, "merge");
+    phi->addIncoming(mCurIrb->getInt1(false), curBb);
+    phi->addIncoming(rhtVal, rhtCurBb);
 
-  auto& irb = *mCurIrb;
-  switch (obj->op) {
-    case BinaryExpr::kMul:  {
-      // check if lftVal is i32
-      if (!lftVal->getType()->isIntegerTy(32)) {
-        auto lftValExt = irb.CreateZExt(lftVal, irb.getInt32Ty());
-        lftValExt->setName(std::move(lftVal->getName() + ".ext"));
-        lftVal = lftValExt;
-      }
-      // check if rhtVal is i32
-      if (!rhtVal->getType()->isIntegerTy(32)) {
-        auto rhtValExt = irb.CreateZExt(rhtVal, irb.getInt32Ty());
-        rhtValExt->setName(std::move(rhtVal->getName() + ".ext"));
-        rhtVal = rhtValExt;
-      }
+    return phi;
+  } else if (obj->op == BinaryExpr::kOr) {
+    auto lftVal = self(obj->lft);
+    checkToBool(lftVal);
 
-      auto res = irb.CreateMul(lftVal, rhtVal);
-      res->setName(std::move("mul"));
-      return res;
-    }
-    case BinaryExpr::kDiv:  {
-      // check if lftVal is i32
-      if (!lftVal->getType()->isIntegerTy(32)) {
-        auto lftValExt = irb.CreateZExt(lftVal, irb.getInt32Ty());
-        lftValExt->setName(std::move(lftVal->getName() + ".ext"));
-        lftVal = lftValExt;
-      }
-      // check if rhtVal is i32
-      if (!rhtVal->getType()->isIntegerTy(32)) {
-        auto rhtValExt = irb.CreateZExt(rhtVal, irb.getInt32Ty());
-        rhtValExt->setName(std::move(rhtVal->getName() + ".ext"));
-        rhtVal = rhtValExt;
-      }
+    auto curBb = mCurIrb->GetInsertBlock();
+    auto lorRhsBb = llvm::BasicBlock::Create(mCtx, "lor.rhs", mCurFunc);
+    auto lorEndBb = llvm::BasicBlock::Create(mCtx, "lor.end", mCurFunc);
+    
+    // in current block
+    mCurIrb->CreateCondBr(lftVal, lorEndBb, lorRhsBb);
+    
+    // in RHS block
+    mCurIrb = std::make_unique<llvm::IRBuilder<>>(lorRhsBb);
+    auto rhtVal = self(obj->rht);
+    //! @details after self(obj->rht), the curr block may not be lorRhsBb
+    //! so we store the curr block here to merge for phi:
+    auto rhtCurBb = mCurIrb->GetInsertBlock();
+    checkToBool(rhtVal);
+    mCurIrb->CreateBr(lorEndBb);
+    
+    // in END block
+    mCurIrb = std::make_unique<llvm::IRBuilder<>>(lorEndBb);
+    llvm::PHINode *phi = mCurIrb->CreatePHI(
+      llvm::Type::getInt1Ty(mCtx), 2, "merge");
+    phi->addIncoming(mCurIrb->getInt1(true), curBb);
+    phi->addIncoming(rhtVal, rhtCurBb);
 
-      auto res = irb.CreateSDiv(lftVal, rhtVal);
-      res->setName(std::move("div"));
-      return res;
-    }
-    case BinaryExpr::kMod:{
-      // check if lftVal is i32
-      if (!lftVal->getType()->isIntegerTy(32)) {
-        auto lftValExt = irb.CreateZExt(lftVal, irb.getInt32Ty());
-        lftValExt->setName(std::move(lftVal->getName() + ".ext"));
-        lftVal = lftValExt;
-      }
-      // check if rhtVal is i32
-      if (!rhtVal->getType()->isIntegerTy(32)) {
-        auto rhtValExt = irb.CreateZExt(rhtVal, irb.getInt32Ty());
-        rhtValExt->setName(std::move(rhtVal->getName() + ".ext"));
-        rhtVal = rhtValExt;
-      }
-      
-      auto res = irb.CreateSRem(lftVal, rhtVal);
-      res->setName(std::move("rem"));
-      return res;
-    }
-    case BinaryExpr::kAdd: {
-      // check if lftVal is i32
-      if (!lftVal->getType()->isIntegerTy(32)) {
-        auto lftValExt = irb.CreateZExt(lftVal, irb.getInt32Ty());
-        lftValExt->setName(std::move(lftVal->getName() + ".ext"));
-        lftVal = lftValExt;
-      }
-      // check if rhtVal is i32
-      if (!rhtVal->getType()->isIntegerTy(32)) {
-        auto rhtValExt = irb.CreateZExt(rhtVal, irb.getInt32Ty());
-        rhtValExt->setName(std::move(rhtVal->getName() + ".ext"));
-        rhtVal = rhtValExt;
-      }
-      
-      auto res = irb.CreateAdd(lftVal, rhtVal);
-      res->setName(std::move("add"));
-      return res;
-    }
-    case BinaryExpr::kSub: {
-      // check if lftVal is i32
-      if (!lftVal->getType()->isIntegerTy(32)) {
-        auto lftValExt = irb.CreateZExt(lftVal, irb.getInt32Ty());
-        lftValExt->setName(std::move(lftVal->getName() + ".ext"));
-        lftVal = lftValExt;
-      }
-      // check if rhtVal is i32
-      if (!rhtVal->getType()->isIntegerTy(32)) {
-        auto rhtValExt = irb.CreateZExt(rhtVal, irb.getInt32Ty());
-        rhtValExt->setName(std::move(rhtVal->getName() + ".ext"));
-        rhtVal = rhtValExt;
-      }
-      
-      auto res = irb.CreateSub(lftVal, rhtVal);
-      res->setName(std::move("sub"));
-      return res;
-    }
-    case BinaryExpr::kGt: {
-      auto res = irb.CreateICmpSGT(lftVal, rhtVal);
-      res->setName(std::move("cmp"));
-      return res;
-    }
-    case BinaryExpr::kLt: {
-      auto res = irb.CreateICmpSLT(lftVal, rhtVal);
-      res->setName(std::move("cmp"));
-      return res;
-    }
-    case BinaryExpr::kGe: {
-      auto res = irb.CreateICmpSGE(lftVal, rhtVal);
-      res->setName(std::move("cmp"));
-      return res;
-    }
-    case BinaryExpr::kLe: {
-      auto res = irb.CreateICmpSLE(lftVal, rhtVal);
-      res->setName(std::move("cmp"));
-      return res;
-    }
-    case BinaryExpr::kEq: {
-      auto res = irb.CreateICmpEQ(lftVal, rhtVal);
-      res->setName(std::move("cmp"));
-      return res;
-    }
-    case BinaryExpr::kNe: {
-      auto res = irb.CreateICmpNE(lftVal, rhtVal);
-      res->setName(std::move("cmp"));
-      return res;
-    }
-    case BinaryExpr::kAnd: {
-      auto curBb = mCurIrb->GetInsertBlock();
-      auto lorRhsBb = llvm::BasicBlock::Create(mCtx, "lor.rhs", mCurFunc);
-      auto lorEndBb = llvm::BasicBlock::Create(mCtx, "lor.end", mCurFunc);
-      // in current block
-      mCurIrb->CreateCondBr(lftVal, lorRhsBb, lorEndBb);
-      
-      // in RHS block
-      mCurIrb = std::make_unique<llvm::IRBuilder<>>(lorRhsBb);
-      mCurIrb->CreateBr(lorEndBb);
-      
-      // in END block
-      mCurIrb = std::make_unique<llvm::IRBuilder<>>(lorEndBb);
-      llvm::PHINode *phi = irb.CreatePHI(llvm::Type::getInt1Ty(mCtx), 2, "merge");
-      phi->addIncoming(mCurIrb->getInt1(false), curBb);
-      phi->addIncoming(rhtVal, lorRhsBb);
-
-      return phi;
-    }
-    case BinaryExpr::kOr: {
-      auto curBb = mCurIrb->GetInsertBlock();
-      auto lorRhsBb = llvm::BasicBlock::Create(mCtx, "lor.rhs", mCurFunc);
-      auto lorEndBb = llvm::BasicBlock::Create(mCtx, "lor.end", mCurFunc);
-      // in current block
-      mCurIrb->CreateCondBr(lftVal, lorEndBb, lorRhsBb);
-      
-      // in RHS block
-      mCurIrb = std::make_unique<llvm::IRBuilder<>>(lorRhsBb);
-      mCurIrb->CreateBr(lorEndBb);
-      
-      // in END block
-      mCurIrb = std::make_unique<llvm::IRBuilder<>>(lorEndBb);
-      llvm::PHINode *phi = irb.CreatePHI(llvm::Type::getInt1Ty(mCtx), 2, "merge");
-      phi->addIncoming(mCurIrb->getInt1(true), curBb);
-      phi->addIncoming(rhtVal, lorRhsBb);
-
-      return phi;
-    }
-    case BinaryExpr::kAssign: {
-      irb.CreateStore(rhtVal, lftVal);
-      return rhtVal;
-    }
-    case BinaryExpr::kComma: {
-      break;
-    }
-    case BinaryExpr::kIndex: {
-      std::vector<llvm::Value*> idxList{
-        irb.getInt64(0), rhtVal
-      };
-      auto res = irb.CreateInBoundsGEP(self(obj->lft->type), lftVal, idxList);
-      return res;
-    }
-    default:
-      ABORT();
+    return phi;
   }
+  
+  //! @else normal case.
+  else {
+    llvm::Value *lftVal, *rhtVal;
+
+    lftVal = self(obj->lft);
+    rhtVal = self(obj->rht);
+
+    switch (obj->op) {
+      case BinaryExpr::kMul:  {
+        checkToExt(lftVal);
+        checkToExt(rhtVal);
+        return mCurIrb->CreateMul(lftVal, rhtVal, std::move("mul"));
+      }
+      case BinaryExpr::kDiv:  {
+        checkToExt(lftVal);
+        checkToExt(rhtVal);
+        return mCurIrb->CreateSDiv(lftVal, rhtVal, std::move("div"));
+      }
+      case BinaryExpr::kMod:{
+        checkToExt(lftVal);
+        checkToExt(rhtVal);
+        return mCurIrb->CreateSRem(lftVal, rhtVal, std::move("rem"));
+      }
+      case BinaryExpr::kAdd: {
+        checkToExt(lftVal);
+        checkToExt(rhtVal);
+        return mCurIrb->CreateAdd(lftVal, rhtVal, std::move("add"));
+      }
+      case BinaryExpr::kSub: {
+        checkToExt(lftVal);
+        checkToExt(rhtVal);
+        return mCurIrb->CreateSub(lftVal, rhtVal, std::move("sub"));
+      }
+      case BinaryExpr::kGt: {
+        return mCurIrb->CreateICmpSGT(lftVal, rhtVal, std::move("cmp"));
+      }
+      case BinaryExpr::kLt: {
+        return mCurIrb->CreateICmpSLT(lftVal, rhtVal, std::move("cmp"));
+      }
+      case BinaryExpr::kGe: {
+        return mCurIrb->CreateICmpSGE(lftVal, rhtVal, std::move("cmp"));
+      }
+      case BinaryExpr::kLe: {
+        return mCurIrb->CreateICmpSLE(lftVal, rhtVal, std::move("cmp"));
+      }
+      case BinaryExpr::kEq: {
+        return mCurIrb->CreateICmpEQ(lftVal, rhtVal, std::move("cmp"));
+      }
+      case BinaryExpr::kNe: {
+        return mCurIrb->CreateICmpNE(lftVal, rhtVal, std::move("cmp"));
+      }
+      case BinaryExpr::kAssign: {
+        mCurIrb->CreateStore(rhtVal, lftVal);
+        return rhtVal;
+      }
+      case BinaryExpr::kComma: {
+        break;
+      }
+      case BinaryExpr::kIndex: {
+        std::vector<llvm::Value*> idxList{ mCurIrb->getInt64(0), rhtVal };
+        auto arrayTy = obj->lft->dcst<ImplicitCastExpr>()->sub->type;
+        return mCurIrb->CreateInBoundsGEP(
+          self(arrayTy), lftVal, idxList, std::move("arrayidx"));
+      }
+      default:
+        ABORT();
+    }
+  }
+
+  return nullptr;
 }
 
 llvm::Value*
 EmitIR::operator()(CallExpr* obj)
-{
-  auto& irb = *mCurIrb;
-  
+{ 
   auto calleeFunc = mMod.getFunction(self(obj->head)->getName());
   
   std::vector<llvm::Value*> argsVector;
@@ -367,26 +297,71 @@ EmitIR::operator()(CallExpr* obj)
     argsVector.push_back(self(arg));
   }
 
-  auto call = irb.CreateCall(calleeFunc, std::move(argsVector));
-  // call->setName("call");
-  return call;
-  // auto call = reinterpret_cast<llvm::Value*>(
-  //   irb.CreateCall(calleeFunc, std::move(argsVector))
-  // );
-  // call->setName(std::move("call"));
-  // return call;
+  return mCurIrb->CreateCall(calleeFunc, std::move(argsVector));
 }
 
 llvm::Value*
-EmitIR::operator()(InitListExpr* obj)
-{
-  
+EmitIR::operator()(InitListExpr* obj, llvm::Value* var, llvm::Type* ty)
+{  
+  auto arrTy = llvm::dyn_cast<llvm::ArrayType>(ty);
+  for (int i = 0; i < arrTy->getNumElements(); ++i) {
+    //! temporary variable
+    std::vector<llvm::Value*> idxList{ mCurIrb->getInt64(0), mCurIrb->getInt64(i)};
+    auto subVar = mCurIrb->CreateInBoundsGEP(arrTy, var, idxList);
+    auto elementTy = arrTy->getElementType();
+
+    //! @if element type is still ArrayType
+    if (llvm::dyn_cast<llvm::ArrayType>(elementTy)) {
+      //! @details if in C source code `size of initList` < `size of array`
+      //! the ast will append a `array_filler` in the InitListExpr
+      if (obj->list[0]->dcst<ImplicitInitExpr>()) {
+        if (i < obj->list.size() - 1) {
+          auto subObj = (obj->list[i + 1])->dcst<InitListExpr>();
+          self(subObj, subVar, elementTy);
+        } else {
+          auto newInitList = new InitListExpr();
+          newInitList->list.push_back(new ImplicitInitExpr());
+          self(newInitList, subVar, elementTy);
+        }
+      } else {
+        if (i < obj->list.size()) {
+          auto subObj = (obj->list[i])->dcst<InitListExpr>();
+          self(subObj, subVar, elementTy);
+        } else {
+          auto newInitList = new InitListExpr();
+          newInitList->list.push_back(new ImplicitInitExpr());
+          self(newInitList, subVar, elementTy);
+        }
+      }
+    }
+    
+    //! @else element type is not ArrayType (such as i32)
+    else {
+      //! @details if in C source code `size of initList` < `size of array`
+      //! the ast will append a `array_filler` in the InitListExpr
+      if (obj->list[0]->dcst<ImplicitInitExpr>()) {
+        if (i < obj->list.size() - 1) {
+          mCurIrb->CreateStore(self(obj->list[i + 1]), subVar);
+        } else {
+          mCurIrb->CreateStore(llvm::ConstantInt::get(elementTy, 0), subVar);
+        }
+      } else {
+        if (i < obj->list.size()) {
+          mCurIrb->CreateStore(self(obj->list[i]), subVar);
+        } else {
+          mCurIrb->CreateStore(llvm::ConstantInt::get(elementTy, 0), subVar);
+        }
+      }
+    }
+  }
+  return nullptr;
 }
 
 llvm::Value*
 EmitIR::operator()(ImplicitInitExpr* obj)
 {
-  
+  auto ty = reinterpret_cast<llvm::Type*>(obj->any);
+  return llvm::Constant::getNullValue(ty);
 }
 
 llvm::Value*
@@ -394,7 +369,6 @@ EmitIR::operator()(ImplicitCastExpr* obj)
 {
   auto sub = self(obj->sub);
 
-  // auto& irb = *mCurIrb;
   switch (obj->kind) {
     case ImplicitCastExpr::kLValueToRValue: {
       auto ty = self(obj->sub->type);
@@ -415,9 +389,6 @@ EmitIR::operator()(ImplicitCastExpr* obj)
   }
 }
 
-
-
-// TODO: 在此添加对更多表达式类型的处理
 
 ////////////////////////////////////////////////////////////////////////////////
 // Statement
@@ -494,15 +465,8 @@ EmitIR::operator()(IfStmt* obj)
   );
 
   auto condVal = self(obj->cond);
-  auto condValTy = condVal->getType();
-  llvm::Value* condBool;
-  if (condValTy->isIntegerTy(1)) { // if is i1
-    condBool = condVal;
-  } else {
-    condBool = mCurIrb->CreateICmpNE(condVal, llvm::ConstantInt::get(condValTy, 0));
-    condBool->setName(std::move("tobool"));
-  }
-  mCurIrb->CreateCondBr(condBool, ifThenBb, ifElseBb);
+  checkToBool(condVal);
+  mCurIrb->CreateCondBr(condVal, ifThenBb, ifElseBb);
 
   //! @c if.then block
   mCurIrb = std::make_unique<llvm::IRBuilder<>>(ifThenBb);
@@ -546,15 +510,8 @@ EmitIR::operator()(WhileStmt* obj)
   //! @c while.cond block
   mCurIrb = std::make_unique<llvm::IRBuilder<>>(while_cond_block);
   auto condVal = self(obj->cond);
-  auto condValTy = condVal->getType();
-  llvm::Value* condBool;
-  if (condValTy->isIntegerTy(1)) { // if is i1
-    condBool = condVal;
-  } else {
-    condBool = mCurIrb->CreateICmpNE(condVal, llvm::ConstantInt::get(condValTy, 0));
-    condBool->setName(std::move("tobool"));
-  }
-  mCurIrb->CreateCondBr(condBool, while_body_block, while_end_block);
+  checkToBool(condVal);
+  mCurIrb->CreateCondBr(condVal, while_body_block, while_end_block);
 
   //! @c while.body block
   mCurIrb = std::make_unique<llvm::IRBuilder<>>(while_body_block);
@@ -608,8 +565,6 @@ EmitIR::operator()(ContinueStmt* obj)
 void
 EmitIR::operator()(ReturnStmt* obj)
 {
-  auto& irb = *mCurIrb;
-
   llvm::Value* retVal;
   if (!obj->expr)
     retVal = nullptr;
@@ -639,24 +594,8 @@ EmitIR::operator()(Decl* obj)
 }
 
 void
-EmitIR::trans_init(llvm::Value* val, Expr* obj)
-{
-  auto& irb = *mCurIrb;
-
-  if (auto p = obj->dcst<InitListExpr>()) {
-    
-  } else if (auto p = obj->dcst<ImplicitInitExpr>()) {
-    
-  } else {
-    irb.CreateStore(self(obj), val);
-  }
-}
-
-void
 EmitIR::operator()(VarDecl* obj)
 {
-  auto& irb = *mCurIrb;
-
   //! @if GLOBAL var
   if (mCurFunc == nullptr) { 
     auto ty = self(obj->type);
@@ -681,7 +620,8 @@ EmitIR::operator()(VarDecl* obj)
     // in ctor's entry block now:
     auto entryBb = llvm::BasicBlock::Create(mCtx, "entry", mCurFunc);
     mCurIrb = std::make_unique<llvm::IRBuilder<>>(entryBb);
-    trans_init(gvar, obj->init);
+    obj->init->any = ty;
+    trans_init(obj->init, gvar);
     mCurIrb->CreateRet(nullptr);
     mCurFunc = nullptr;
   }
@@ -690,22 +630,28 @@ EmitIR::operator()(VarDecl* obj)
   else {  
     // move `alloca` to entryBlock
     auto entryBb = &mCurFunc->getEntryBlock();
+    auto varTy = self(obj->type);
     llvm::AllocaInst* var;
     if (entryBb->getTerminator() != nullptr) {
       var = llvm::IRBuilder<>(entryBb->getTerminator()).CreateAlloca(
-        self(obj->type), nullptr, std::move(obj->name)
+        varTy, nullptr, std::move(obj->name)
       );
     } else {
       var = llvm::IRBuilder<>(entryBb).CreateAlloca(
-        self(obj->type), nullptr, std::move(obj->name)
+        varTy, nullptr, std::move(obj->name)
       );
     }
+
+    //! @details About ArrayType:
+    //! when `varTy` is a llvm::ArrayType
+    //! after alloca, `var->getType()` decay to PointerType
 
     obj->any = var;
 
     if (obj->init) {
-      // irb.CreateStore(self(obj->init), var);
-      trans_init(var, obj->init);
+      obj->init->any = varTy;
+      // mCurIrb->CreateStore(self(obj->init), var);
+      trans_init(obj->init, var);
     }
   }
 }
@@ -757,4 +703,47 @@ EmitIR::operator()(FunctionDecl* obj)
 
   // function end: reset the mCurFunc
   mCurFunc = nullptr;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Helper
+////////////////////////////////////////////////////////////////////////////////
+
+//! @param obj Expr* VarDecl::init
+//! @param val llvm::Value* variable
+void
+EmitIR::trans_init(Expr* obj, llvm::Value* var)
+{
+  if (auto init = obj->dcst<InitListExpr>()) {
+    self(init, var, reinterpret_cast<llvm::ArrayType*>(obj->any));
+  } else {
+    mCurIrb->CreateStore(self(obj), var);
+  }
+}
+
+//! @brief check if the `val` is i1, if not, tobool
+void 
+EmitIR::checkToBool(llvm::Value* &val)
+{
+  // check rhtVal and tobool
+  if (!val->getType()->isIntegerTy(1)) {
+    auto valTy = val->getType();
+    auto tobool = mCurIrb->CreateICmpNE(
+      val, llvm::ConstantInt::get(valTy, 0));
+    tobool->setName(std::move("tobool"));
+    val = tobool;
+  }
+}
+
+//! @brief check if the `val` is i32, if not, ext
+void 
+EmitIR::checkToExt(llvm::Value* &val)
+{
+  // check if val is i32
+  if (!val->getType()->isIntegerTy(32)) {
+    auto valExt = mCurIrb->CreateZExt(val, mCurIrb->getInt32Ty());
+    valExt->setName(std::move(val->getName() + ".ext"));
+    val = valExt;
+  }
 }

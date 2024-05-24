@@ -22,7 +22,11 @@ private:
   llvm::Function* mCurFunc{ nullptr };
   std::unique_ptr<llvm::IRBuilder<>> mCurIrb;
 
-  void trans_init(llvm::Value* val, asg::Expr* obj);
+  void trans_init(asg::Expr* obj, llvm::Value* val);
+
+  void checkToBool(llvm::Value* &val);
+
+  void checkToExt(llvm::Value* &val);
 
   //////////////////////////////////////////////////////////////////////////////
   // Type
@@ -50,7 +54,7 @@ private:
 
   llvm::Value* operator()(asg::CallExpr* obj);
 
-  llvm::Value* operator()(asg::InitListExpr* obj);
+  llvm::Value* operator()(asg::InitListExpr* obj, llvm::Value* var, llvm::Type* ty);
 
   llvm::Value* operator()(asg::ImplicitInitExpr* obj);
   
