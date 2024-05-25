@@ -79,7 +79,8 @@
     "semaphore": "cpp",
     "stdexcept": "cpp",
     "thread": "cpp",
-    "cinttypes": "cpp"
+    "cinttypes": "cpp",
+    "sylib.h": "c"
   },
 
   //* C/C++

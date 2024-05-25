@@ -274,10 +274,22 @@ EmitIR::operator()(BinaryExpr* obj)
         break;
       }
       case BinaryExpr::kIndex: {
-        std::vector<llvm::Value*> idxList{ mCurIrb->getInt64(0), rhtVal };
-        auto arrayTy = obj->lft->dcst<ImplicitCastExpr>()->sub->type;
+        // Sigh ext to i64
+        auto idxExt = mCurIrb->CreateSExt(
+          rhtVal, mCurIrb->getInt64Ty(), std::move("idxprom"));
+        // get array type
+        auto arrayTy = self(obj->lft->dcst<ImplicitCastExpr>()->sub->type);
+        // check if is array type, if not, adjust the idxList
+        std::vector<llvm::Value*> idxList;
+        if (llvm::dyn_cast<llvm::ArrayType>(arrayTy))
+          idxList = { mCurIrb->getInt64(0), idxExt };
+        else if (llvm::dyn_cast<llvm::PointerType>(arrayTy)) {
+          idxList = { idxExt };
+          arrayTy = self(obj->type);
+        }
+        
         return mCurIrb->CreateInBoundsGEP(
-          self(arrayTy), lftVal, idxList, std::move("arrayidx"));
+          arrayTy, lftVal, std::move(idxList), std::move("arrayidx"));
       }
       default:
         ABORT();
@@ -293,11 +305,25 @@ EmitIR::operator()(CallExpr* obj)
   auto calleeFunc = mMod.getFunction(self(obj->head)->getName());
   
   std::vector<llvm::Value*> argsVector;
-  for (auto&& arg : obj->args) {
-    argsVector.push_back(self(arg));
+  for (auto arg : obj->args) {
+    auto argVal = self(arg);
+    //! @note in c code:
+    //! when pass a array to a function param, will decay the array.
+    if (auto p = arg->dcst<ImplicitCastExpr>()) {
+      if (p->kind == ImplicitCastExpr::kArrayToPointerDecay) {
+        std::vector<llvm::Value*> idxList{ 
+          mCurIrb->getInt64(0), mCurIrb->getInt64(0) };
+        argVal = mCurIrb->CreateInBoundsGEP(
+          self(p->sub->type), self(p->sub), idxList, "arraydecay");
+      }
+    }
+    argsVector.push_back(argVal);
   }
 
-  return mCurIrb->CreateCall(calleeFunc, std::move(argsVector));
+  auto ret = mCurIrb->CreateCall(calleeFunc, std::move(argsVector));
+  if (!calleeFunc->getFunctionType()->getReturnType()->isVoidTy())
+    ret->setName(std::move("call"));
+  return ret;
 }
 
 llvm::Value*
@@ -306,7 +332,8 @@ EmitIR::operator()(InitListExpr* obj, llvm::Value* var, llvm::Type* ty)
   auto arrTy = llvm::dyn_cast<llvm::ArrayType>(ty);
   for (int i = 0; i < arrTy->getNumElements(); ++i) {
     //! temporary variable
-    std::vector<llvm::Value*> idxList{ mCurIrb->getInt64(0), mCurIrb->getInt64(i)};
+    std::vector<llvm::Value*> idxList{ 
+      mCurIrb->getInt64(0), mCurIrb->getInt64(i) };
     auto subVar = mCurIrb->CreateInBoundsGEP(arrTy, var, idxList);
     auto elementTy = arrTy->getElementType();
 
