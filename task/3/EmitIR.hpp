@@ -26,7 +26,9 @@ private:
 
   void checkToBool(llvm::Value* &val);
 
-  void checkToExt(llvm::Value* &val);
+  void checkToZExt32(llvm::Value* &val);
+
+  void checkToSExt64(llvm::Value* &val);
 
   //////////////////////////////////////////////////////////////////////////////
   // Type
@@ -85,8 +87,6 @@ private:
 
   void operator()(asg::ReturnStmt* obj);
 
-  // TODO: 添加语句处理相关声明
-
   //////////////////////////////////////////////////////////////////////////////
   // Declaration
   //////////////////////////////////////////////////////////////////////////////
@@ -95,10 +95,6 @@ private:
 
   void operator()(asg::FunctionDecl* obj);
 
-  // TODO: 添加声明处理相关声明
-
   void operator()(asg::VarDecl* obj);
 
 };
-
-// 声明( Decl ) -> 类型( Type ) -> 表达式( Expr ) -> 语句( Stmt )

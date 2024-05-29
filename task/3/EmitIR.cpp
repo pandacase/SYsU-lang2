@@ -139,7 +139,7 @@ EmitIR::operator()(UnaryExpr* obj)
     case UnaryExpr::kPos:
       return val;
     case UnaryExpr::kNeg: {
-      checkToExt(val);
+      checkToZExt32(val);
       return mCurIrb->CreateNeg(val, std::move("sub"));
     }
     //! @note In C/CPP, Not operator is logical not, implicitly convert `int`
@@ -224,28 +224,28 @@ EmitIR::operator()(BinaryExpr* obj)
 
     switch (obj->op) {
       case BinaryExpr::kMul:  {
-        checkToExt(lftVal);
-        checkToExt(rhtVal);
+        checkToZExt32(lftVal);
+        checkToZExt32(rhtVal);
         return mCurIrb->CreateMul(lftVal, rhtVal, std::move("mul"));
       }
       case BinaryExpr::kDiv:  {
-        checkToExt(lftVal);
-        checkToExt(rhtVal);
+        checkToZExt32(lftVal);
+        checkToZExt32(rhtVal);
         return mCurIrb->CreateSDiv(lftVal, rhtVal, std::move("div"));
       }
       case BinaryExpr::kMod:{
-        checkToExt(lftVal);
-        checkToExt(rhtVal);
+        checkToZExt32(lftVal);
+        checkToZExt32(rhtVal);
         return mCurIrb->CreateSRem(lftVal, rhtVal, std::move("rem"));
       }
       case BinaryExpr::kAdd: {
-        checkToExt(lftVal);
-        checkToExt(rhtVal);
+        checkToZExt32(lftVal);
+        checkToZExt32(rhtVal);
         return mCurIrb->CreateAdd(lftVal, rhtVal, std::move("add"));
       }
       case BinaryExpr::kSub: {
-        checkToExt(lftVal);
-        checkToExt(rhtVal);
+        checkToZExt32(lftVal);
+        checkToZExt32(rhtVal);
         return mCurIrb->CreateSub(lftVal, rhtVal, std::move("sub"));
       }
       case BinaryExpr::kGt: {
@@ -274,17 +274,17 @@ EmitIR::operator()(BinaryExpr* obj)
         break;
       }
       case BinaryExpr::kIndex: {
-        // Sigh ext to i64
-        auto idxExt = mCurIrb->CreateSExt(
-          rhtVal, mCurIrb->getInt64Ty(), std::move("idxprom"));
+        // Sign ext to i64
+        checkToSExt64(rhtVal);
+
         // get array type
         auto arrayTy = self(obj->lft->dcst<ImplicitCastExpr>()->sub->type);
         // check if is array type, if not, adjust the idxList
         std::vector<llvm::Value*> idxList;
         if (llvm::dyn_cast<llvm::ArrayType>(arrayTy))
-          idxList = { mCurIrb->getInt64(0), idxExt };
+          idxList = { mCurIrb->getInt64(0), rhtVal };
         else if (llvm::dyn_cast<llvm::PointerType>(arrayTy)) {
-          idxList = { idxExt };
+          idxList = { rhtVal };
           arrayTy = self(obj->type);
         }
         
@@ -424,7 +424,6 @@ EmitIR::operator()(ImplicitCastExpr* obj)
 void
 EmitIR::operator()(Stmt* obj)
 {
-  // TODO: 在此添加对更多Stmt类型的处理的跳转
   if (auto p = obj->dcst<NullStmt>())
     return;
 
@@ -763,14 +762,26 @@ EmitIR::checkToBool(llvm::Value* &val)
   }
 }
 
-//! @brief check if the `val` is i32, if not, ext
+//! @brief check if the `val` is i32, if not, zero ext
 void 
-EmitIR::checkToExt(llvm::Value* &val)
+EmitIR::checkToZExt32(llvm::Value* &val)
 {
   // check if val is i32
   if (!val->getType()->isIntegerTy(32)) {
     auto valExt = mCurIrb->CreateZExt(val, mCurIrb->getInt32Ty());
     valExt->setName(std::move(val->getName() + ".ext"));
+    val = valExt;
+  }
+}
+
+//! @brief check if the `val` is i64, if not, sign ext
+void 
+EmitIR::checkToSExt64(llvm::Value* &val)
+{
+  // check if val is i64
+  if (!val->getType()->isIntegerTy(64)) {
+    auto valExt = mCurIrb->CreateSExt(val, mCurIrb->getInt64Ty());
+    valExt->setName(std::move("idxprom"));
     val = valExt;
   }
 }
